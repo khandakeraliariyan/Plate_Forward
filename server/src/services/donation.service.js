@@ -122,10 +122,134 @@ const deleteDonation = async (userId, donationId) => {
     return true;
 };
 
+const getAllDonations = async (query) => {
+    const {
+        page = 1,
+        limit = 10,
+        search,
+        city,
+        foodType,
+        status = "available",
+        sort = "newest",
+    } = query;
+
+    const filter = {};
+
+    if (status) {
+        filter.status = status;
+    }
+
+    if (city) {
+        filter.city = {
+            $regex: city,
+            $options: "i",
+        };
+    }
+
+    if (foodType) {
+        filter.foodType = foodType;
+    }
+
+    if (search) {
+        filter.$or = [
+            {
+                title: {
+                    $regex: search,
+                    $options: "i",
+                },
+            },
+            {
+                description: {
+                    $regex: search,
+                    $options: "i",
+                },
+            },
+        ];
+    }
+
+    let sortOption = {};
+
+    switch (sort) {
+        case "oldest":
+            sortOption = {
+                createdAt: 1,
+            };
+            break;
+
+        case "expiry":
+            sortOption = {
+                expiryTime: 1,
+            };
+            break;
+
+        case "quantity":
+            sortOption = {
+                quantity: -1,
+            };
+            break;
+
+        default:
+            sortOption = {
+                createdAt: -1,
+            };
+    }
+
+    const currentPage = Math.max(
+        parseInt(page, 10) || 1,
+        1
+    );
+
+    const pageSize = Math.min(
+        Math.max(parseInt(limit, 10) || 10, 1),
+        100
+    );
+
+    const skip = (currentPage - 1) * pageSize;
+
+    const [donations, total] = await Promise.all([
+        Donation.find(filter)
+            .populate({
+                path: "restaurant",
+                select:
+                    "restaurantName city logo address isVerified",
+            })
+            .sort(sortOption)
+            .skip(skip)
+            .limit(pageSize),
+
+        Donation.countDocuments(filter),
+    ]);
+
+    const totalPages = Math.ceil(
+        total / pageSize
+    );
+
+    return {
+        donations,
+
+        pagination: {
+            total,
+
+            page: currentPage,
+
+            limit: pageSize,
+
+            totalPages,
+
+            hasNextPage:
+                currentPage < totalPages,
+
+            hasPrevPage:
+                currentPage > 1,
+        },
+    };
+};
+
 module.exports = {
     createDonation,
     getMyDonations,
     getDonationById,
     updateDonation,
     deleteDonation,
+    getAllDonations
 };
