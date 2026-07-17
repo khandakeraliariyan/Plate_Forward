@@ -4,4 +4,10 @@ const router = express.Router();
 
 router.use("/health", require("./health.routes"));
 
+router.use("/auth", require("./auth.routes"));
+
+router.use("/restaurants", require("./restaurant.routes"));
+
+router.use("/donations", require("./donation.routes"));
+
 module.exports = router;
