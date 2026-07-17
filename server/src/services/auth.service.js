@@ -51,7 +51,12 @@ const login = async (email, password) => {
     };
 };
 
+const getMe = async (id) => {
+    return await User.findById(id);
+};
+
 module.exports = {
     register,
     login,
+    getMe,
 };
