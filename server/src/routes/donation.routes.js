@@ -7,16 +7,19 @@ const authorize = require("../middlewares/authorize");
 
 const donationController = require("../controllers/donation.controller");
 
+// Public
+router.get("/", donationController.getAllDonations);
+
+// Protected
 router.use(protect);
+router.use(authorize("restaurant"));
 
-router.post("/", authorize("restaurant"), donationController.createDonation);
+router.get("/me", donationController.getMyDonations);
+router.post("/", donationController.createDonation);
+router.patch("/:id", donationController.updateDonation);
+router.delete("/:id", donationController.deleteDonation);
 
-router.get("/me", authorize("restaurant"), donationController.getMyDonations);
-
-router.patch("/:id", authorize("restaurant"), donationController.updateDonation);
-
-router.delete("/:id", authorize("restaurant"), donationController.deleteDonation);
-
+// Parameterized route last
 router.get("/:id", donationController.getDonationById);
 
 module.exports = router;
