@@ -4,6 +4,8 @@ const { createDonationSchema } = require("../validations/donation.validation");
 
 const donationService = require("../services/donation.service");
 
+const { createDonationSchema, donationQuerySchema } = require("../validations/donation.validation");
+
 exports.createDonation = catchAsync(async (req, res) => {
     const payload = createDonationSchema.parse(req.body);
 
@@ -68,10 +70,24 @@ exports.deleteDonation = catchAsync(async (req, res) => {
     });
 });
 
-module.exports = {
-    createDonation,
-    getMyDonations,
-    getDonationById,
-    updateDonation,
-    deleteDonation,
-};
+exports.getAllDonations = catchAsync(
+    async (req, res) => {
+        const query = donationQuerySchema.parse(req.query);
+
+        const result = await donationService.getAllDonations(
+            query
+        );
+
+        res.status(200).json({
+            success: true,
+
+            message:
+                "Donations fetched successfully.",
+
+            pagination:
+                result.pagination,
+
+            data: result.donations,
+        });
+    }
+);
