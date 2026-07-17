@@ -67,3 +67,11 @@ exports.deleteDonation = catchAsync(async (req, res) => {
         message: "Donation deleted successfully.",
     });
 });
+
+module.exports = {
+    createDonation,
+    getMyDonations,
+    getDonationById,
+    updateDonation,
+    deleteDonation,
+};
