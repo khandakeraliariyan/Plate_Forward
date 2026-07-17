@@ -2,37 +2,38 @@ const { register, login, } = require("../services/auth.service");
 
 const { registerSchema, loginSchema, } = require("../validations/auth.validation");
 
-exports.register = async (req, res, next) => {
-    try {
-        const payload = registerSchema.parse(req.body);
+const catchAsync = require("../utils/catchAsync");
 
-        const data = await register(payload);
+exports.register = catchAsync(async (req, res) => {
+    const payload = registerSchema.parse(req.body);
 
-        res.status(201).json({
-            success: true,
-            message: "Registration successful",
-            data,
-        });
-    } catch (error) {
-        next(error);
-    }
-};
+    const data = await register(payload);
 
-exports.login = async (req, res, next) => {
-    try {
-        const payload = loginSchema.parse(req.body);
+    res.status(201).json({
+        success: true,
+        message: "Registration successful",
+        data,
+    });
+});
 
-        const data = await login(
-            payload.email,
-            payload.password
-        );
+exports.login = catchAsync(async (req, res) => {
+    const payload = loginSchema.parse(req.body);
 
-        res.json({
-            success: true,
-            message: "Login successful",
-            data,
-        });
-    } catch (error) {
-        next(error);
-    }
-};
+    const data = await login(
+        payload.email,
+        payload.password
+    );
+
+    res.json({
+        success: true,
+        message: "Login successful",
+        data,
+    });
+});
+
+exports.getMe = catchAsync(async (req, res) => {
+    res.json({
+        success: true,
+        data: req.user,
+    });
+});
