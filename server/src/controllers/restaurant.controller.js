@@ -1,12 +1,13 @@
 const catchAsync = require("../utils/catchAsync");
 
-const { createRestaurantSchema } = require("../validations/restaurant.validation");
+const { createRestaurantSchema, updateRestaurantSchema } = require("../validations/restaurant.validation");
 
 const ApiError = require("../utils/ApiError");
 
 const {
     createRestaurant,
     getMyRestaurant,
+    updateRestaurant,
     uploadLogo,
     uploadCover,
     addGalleryImages,
@@ -43,6 +44,18 @@ exports.getMyRestaurant = catchAsync(
         });
     }
 );
+
+exports.updateRestaurant = catchAsync(async (req, res) => {
+    const payload = updateRestaurantSchema.parse(req.body);
+
+    const restaurant = await updateRestaurant(req.user._id, payload);
+
+    res.json({
+        success: true,
+        message: "Restaurant profile updated successfully.",
+        data: restaurant,
+    });
+});
 
 exports.uploadLogo = catchAsync(async (req, res) => {
     if (!req.file) {

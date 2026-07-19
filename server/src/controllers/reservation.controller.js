@@ -1,6 +1,6 @@
 const catchAsync = require("../utils/catchAsync");
 
-const { reserveDonationSchema, cancelReservationSchema, rateReservationSchema, } = require("../validations/reservation.validation");
+const { reserveDonationSchema, cancelReservationSchema, rateReservationSchema, rejectReservationSchema, } = require("../validations/reservation.validation");
 
 const reservationService = require("../services/reservation.service");
 const volunteerMatchingService = require("../services/volunteerMatching.service");
@@ -40,6 +40,22 @@ exports.cancelReservation = catchAsync(async (req, res) => {
     });
 }
 );
+
+exports.rejectReservation = catchAsync(async (req, res) => {
+    const payload = rejectReservationSchema.parse(req.body);
+
+    const reservation = await reservationService.rejectReservation(
+        req.params.reservationId,
+        req.user._id,
+        payload
+    );
+
+    res.status(200).json({
+        success: true,
+        message: "Reservation rejected.",
+        data: reservation,
+    });
+});
 
 exports.getRestaurantReservations = catchAsync(async (req, res) => {
     const reservations = await reservationService.getRestaurantReservations(

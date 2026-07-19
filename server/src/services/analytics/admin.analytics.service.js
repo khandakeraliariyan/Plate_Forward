@@ -14,14 +14,25 @@ const ACTIVE_WINDOW_DAYS = 30;
 const getDashboard = async () => {
     const [
         totalUsers,
+        totalRestaurants,
+        totalNgos,
+        totalVolunteers,
         newUsersLast30,
         newUsersPrev30,
         activeUsers,
         userGrowthRows,
         foodSavedRows,
         mealsServedCount,
+        totalDonations,
+        totalReservations,
     ] = await Promise.all([
         User.countDocuments(),
+
+        User.countDocuments({ role: "restaurant" }),
+
+        User.countDocuments({ role: "ngo" }),
+
+        User.countDocuments({ role: "volunteer" }),
 
         User.countDocuments({ createdAt: { $gte: daysAgo(ACTIVE_WINDOW_DAYS) } }),
 
@@ -50,6 +61,10 @@ const getDashboard = async () => {
         ]),
 
         Reservation.countDocuments({ status: "completed" }),
+
+        Donation.countDocuments(),
+
+        Reservation.countDocuments(),
     ]);
 
     const foodSavedKg = foodSavedRows.reduce(
@@ -64,12 +79,19 @@ const getDashboard = async () => {
     return {
         platformGrowth: {
             totalUsers,
+            totalRestaurants,
+            totalNgos,
+            totalVolunteers,
             newUsersLast30Days: newUsersLast30,
             growthRatePercent: growthRate,
             monthlyNewUsers: fillMonthlyTrend(userGrowthRows, MONTHS_BACK),
         },
 
         newUsers: newUsersLast30,
+
+        totalDonations,
+
+        totalReservations,
 
         foodSavedKg: Math.round(foodSavedKg * 10) / 10,
 

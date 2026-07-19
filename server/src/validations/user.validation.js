@@ -56,8 +56,15 @@ const volunteerProfileSchema = z.object({
     }
 );
 
+const updateProfileSchema = z.object({
+    fullName: z.string().min(3).optional(),
+
+    phone: z.string().min(6).optional(),
+});
+
 module.exports = {
     ngoPreferencesSchema,
     recommendationsQuerySchema,
     volunteerProfileSchema,
+    updateProfileSchema,
 };

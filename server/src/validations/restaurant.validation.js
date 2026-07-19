@@ -32,6 +32,9 @@ const createRestaurantSchema = z.object({
     foodCategories: z.array(z.string()).optional(),
 });
 
+const updateRestaurantSchema = createRestaurantSchema.partial();
+
 module.exports = {
     createRestaurantSchema,
+    updateRestaurantSchema,
 };

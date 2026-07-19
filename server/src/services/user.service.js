@@ -107,6 +107,16 @@ const updateVolunteerProfile = async (userId, profile) => {
     return user;
 };
 
+const updateProfile = async (userId, payload) => {
+    const user = await getProfile(userId);
+
+    Object.assign(user, payload);
+
+    await user.save();
+
+    return user;
+};
+
 module.exports = {
     getProfile,
     uploadAvatar,
@@ -114,4 +124,5 @@ module.exports = {
     deleteDocument,
     updateNgoPreferences,
     updateVolunteerProfile,
+    updateProfile,
 };

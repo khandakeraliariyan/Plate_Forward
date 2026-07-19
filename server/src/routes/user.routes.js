@@ -12,6 +12,8 @@ router.use(protect);
 
 router.get("/me", controller.getProfile);
 
+router.patch("/me", controller.updateProfile);
+
 router.patch(
     "/me/ngo-preferences",
     authorize("ngo"),

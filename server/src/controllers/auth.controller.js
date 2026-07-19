@@ -6,6 +6,7 @@ const {
     refreshAccessToken,
     logout,
     logoutAll,
+    changePassword,
     verifyEmail,
     forgotPassword,
     resetPassword,
@@ -16,6 +17,7 @@ const {
     loginSchema,
     forgotPasswordSchema,
     resetPasswordSchema,
+    changePasswordSchema,
 } = require("../validations/auth.validation");
 
 const catchAsync = require("../utils/catchAsync");
@@ -167,5 +169,23 @@ exports.resetPassword = catchAsync(async (req, res) => {
     res.json({
         success: true,
         message: "Password reset successful",
+    });
+});
+
+exports.changePassword = catchAsync(async (req, res) => {
+    const payload = changePasswordSchema.parse(req.body);
+
+    await changePassword(
+        req.user._id,
+        payload.currentPassword,
+        payload.newPassword,
+        requestContext(req)
+    );
+
+    clearRefreshCookie(res);
+
+    res.json({
+        success: true,
+        message: "Password changed successfully. Please log in again.",
     });
 });

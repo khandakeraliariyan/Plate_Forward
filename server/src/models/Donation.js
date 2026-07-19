@@ -62,6 +62,13 @@ const donationSchema = new mongoose.Schema(
             required: true,
         },
 
+        // Set once an "expiring soon" reminder has been sent, so the hourly
+        // reminder job doesn't re-notify the restaurant every run.
+        reminderSentAt: {
+            type: Date,
+            default: null,
+        },
+
         pickupStartTime: {
             type: Date,
             required: true,

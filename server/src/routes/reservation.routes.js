@@ -20,6 +20,8 @@ router.get("/restaurant", authorize("restaurant"), reservationController.getRest
 
 router.patch("/:reservationId/accept", authorize("restaurant"), reservationController.acceptReservation);
 
+router.patch("/:reservationId/reject", authorize("restaurant"), reservationController.rejectReservation);
+
 router.patch("/:reservationId/complete", authorize("restaurant", "admin"), reservationController.completeReservation);
 
 router.patch("/:reservationId/pickup", authorize("volunteer"), reservationController.pickupReservation);

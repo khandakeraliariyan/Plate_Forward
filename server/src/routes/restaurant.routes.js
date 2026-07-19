@@ -16,6 +16,8 @@ router.post("/", controller.createRestaurant);
 
 router.get("/me", controller.getMyRestaurant);
 
+router.patch("/me", controller.updateRestaurant);
+
 router.patch("/me/logo", uploadImageSingle("logo"), controller.uploadLogo);
 
 router.patch("/me/cover", uploadImageSingle("cover"), controller.uploadCover);

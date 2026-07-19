@@ -297,12 +297,44 @@ const resetPassword = async (rawToken, newPassword, context = {}) => {
     return user;
 };
 
+const changePassword = async (userId, currentPassword, newPassword, context = {}) => {
+    const user = await User.findById(userId).select("+password");
+
+    if (!user) {
+        throw new ApiError(404, "User not found.");
+    }
+
+    const matched = await user.comparePassword(currentPassword);
+
+    if (!matched) {
+        throw new ApiError(401, "Current password is incorrect.");
+    }
+
+    user.password = newPassword;
+
+    await user.save();
+
+    // Same reasoning as resetPassword: a password change should invalidate
+    // any other logged-in device/session.
+    await sessionService.revokeAllSessions(userId);
+
+    await auditLogService.record({
+        user: userId,
+        action: "PASSWORD_CHANGED",
+        ip: context.ip,
+        userAgent: context.userAgent,
+    });
+
+    return user;
+};
+
 module.exports = {
     register,
     login,
     refreshAccessToken,
     logout,
     logoutAll,
+    changePassword,
     getMe,
     verifyEmail,
     forgotPassword,

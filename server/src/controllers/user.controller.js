@@ -5,7 +5,7 @@ const userService = require("../services/user.service");
 const sessionService = require("../services/session.service");
 const auditLogService = require("../services/auditLog.service");
 
-const { ngoPreferencesSchema, recommendationsQuerySchema, volunteerProfileSchema } = require("../validations/user.validation");
+const { ngoPreferencesSchema, recommendationsQuerySchema, volunteerProfileSchema, updateProfileSchema } = require("../validations/user.validation");
 const recommendationService = require("../services/recommendation.service");
 
 exports.getProfile = catchAsync(async (req, res) => {
@@ -13,6 +13,18 @@ exports.getProfile = catchAsync(async (req, res) => {
 
     res.json({
         success: true,
+        data: user,
+    });
+});
+
+exports.updateProfile = catchAsync(async (req, res) => {
+    const payload = updateProfileSchema.parse(req.body);
+
+    const user = await userService.updateProfile(req.user._id, payload);
+
+    res.json({
+        success: true,
+        message: "Profile updated successfully.",
         data: user,
     });
 });

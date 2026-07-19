@@ -10,6 +10,7 @@ const reservationAcceptedTemplate = require("../templates/reservationAccepted.te
 const foodPickedUpTemplate = require("../templates/foodPickedUp.template");
 const foodDeliveredTemplate = require("../templates/foodDelivered.template");
 const reservationCompletedTemplate = require("../templates/reservationCompleted.template");
+const reservationCancelledTemplate = require("../templates/reservationCancelled.template");
 
 const ApiError = require("../utils/ApiError");
 
@@ -33,6 +34,7 @@ const {
     FOOD_DELIVERED,
     RESERVATION_COMPLETED,
     RESERVATION_CANCELLED,
+    RESERVATION_REJECTED,
     DONATION_RESERVED,
     DONATION_COMPLETED,
 } = require("../socket/events");
@@ -226,6 +228,19 @@ const cancelReservation = async (reservationId, ngoId, payload) => {
             },
         });
 
+        if (restaurant.user) {
+            await emailService.sendTemplateEmail({
+                to: restaurant.user.email,
+                subject: "Reservation Cancelled",
+                template: reservationCancelledTemplate,
+                data: {
+                    name: restaurant.restaurantName,
+                    reservationCode: reservation.pickupCode,
+                    reason: reservation.cancellationReason,
+                },
+            });
+        }
+
         emitToRoom(
             reservationRoom(reservation._id.toString()),
             RESERVATION_CANCELLED,
@@ -243,6 +258,110 @@ const cancelReservation = async (reservationId, ngoId, payload) => {
         emitActivityFeed({
             type: RESERVATION_CANCELLED,
             message: "An NGO cancelled a reservation.",
+            data: { reservationId: reservation._id },
+        });
+
+        return reservation;
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+// Restaurant-initiated decline of a pending reservation request, distinct
+// from cancelReservation (NGO-initiated). Only applies before the
+// restaurant has accepted - once accepted, the restaurant is committed to
+// the existing accept/pickup/deliver/complete workflow.
+const rejectReservation = async (reservationId, restaurantUserId, { reason } = {}) => {
+    const session = await mongoose.startSession();
+
+    try {
+        session.startTransaction();
+
+        const restaurant = await Restaurant.findOne({
+            user: restaurantUserId,
+        }).session(session);
+
+        if (!restaurant) {
+            throw new ApiError(404, "Restaurant profile not found.");
+        }
+
+        const reservation = await Reservation.findById(
+            reservationId
+        ).session(session);
+
+        if (!reservation) {
+            throw new ApiError(404, "Reservation not found.");
+        }
+
+        if (reservation.restaurant.toString() !== restaurant._id.toString()) {
+            throw new ApiError(403, "Unauthorized.");
+        }
+
+        if (reservation.status !== "reserved") {
+            throw new ApiError(
+                400,
+                "Only pending reservations can be rejected."
+            );
+        }
+
+        reservation.status = "cancelled";
+        reservation.cancelledAt = new Date();
+        reservation.cancellationReason = reason || "Rejected by restaurant.";
+
+        await reservation.save({ session });
+
+        await Donation.findByIdAndUpdate(
+            reservation.donation,
+            {
+                $set: {
+                    status: "available",
+                },
+            },
+            { session }
+        );
+
+        await session.commitTransaction();
+
+        const ngo = await User.findById(reservation.ngo);
+
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Reservation Declined",
+            message: `${restaurant.restaurantName} declined your reservation request.`,
+            type: "RESERVATION_CANCELLED",
+            priority: "high",
+            data: { reservation: reservation._id },
+        });
+
+        if (ngo) {
+            await emailService.sendTemplateEmail({
+                to: ngo.email,
+                subject: "Reservation Declined",
+                template: reservationCancelledTemplate,
+                data: {
+                    name: ngo.fullName,
+                    reservationCode: reservation.pickupCode,
+                    reason: reservation.cancellationReason,
+                },
+            });
+        }
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_REJECTED,
+            reservation
+        );
+
+        emitToRoom(userRoom(reservation.ngo.toString()), RESERVATION_REJECTED, reservation);
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_REJECTED,
+            message: `${restaurant.restaurantName} declined a reservation.`,
             data: { reservationId: reservation._id },
         });
 
@@ -878,6 +997,8 @@ module.exports = {
     reserveDonation,
 
     cancelReservation,
+
+    rejectReservation,
 
     getRestaurantReservations,
 

@@ -26,9 +26,16 @@ const resetPasswordSchema = z.object({
     password: z.string().min(6),
 });
 
+const changePasswordSchema = z.object({
+    currentPassword: z.string().min(6),
+
+    newPassword: z.string().min(6),
+});
+
 module.exports = {
     registerSchema,
     loginSchema,
     forgotPasswordSchema,
     resetPasswordSchema,
+    changePasswordSchema,
 };

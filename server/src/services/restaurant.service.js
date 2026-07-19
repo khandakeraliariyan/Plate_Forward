@@ -40,6 +40,16 @@ const findOwnedRestaurant = async (userId) => {
     return restaurant;
 };
 
+const updateRestaurant = async (userId, payload) => {
+    const restaurant = await findOwnedRestaurant(userId);
+
+    Object.assign(restaurant, payload);
+
+    await restaurant.save();
+
+    return restaurant;
+};
+
 const uploadLogo = async (userId, file) => {
     const restaurant = await findOwnedRestaurant(userId);
 
@@ -118,6 +128,7 @@ const removeGalleryImage = async (userId, imageId) => {
 module.exports = {
     createRestaurant,
     getMyRestaurant,
+    updateRestaurant,
     uploadLogo,
     uploadCover,
     addGalleryImages,

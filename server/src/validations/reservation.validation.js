@@ -17,8 +17,13 @@ const rateReservationSchema = z.object({
     comment: z.string().max(300).optional(),
 });
 
+const rejectReservationSchema = z.object({
+    reason: z.string().min(5).max(300).optional(),
+});
+
 module.exports = {
     reserveDonationSchema,
     cancelReservationSchema,
     rateReservationSchema,
+    rejectReservationSchema,
 };

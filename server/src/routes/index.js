@@ -24,4 +24,6 @@ router.use("/maps", require("./maps.routes"));
 
 router.use("/security", require("./security.routes"));
 
+router.use("/admin", require("./admin.routes"));
+
 module.exports = router;
