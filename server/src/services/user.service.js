@@ -73,9 +73,27 @@ const deleteDocument = async (userId, documentId) => {
     return user;
 };
 
+const updateNgoPreferences = async (userId, preferences) => {
+    const user = await getProfile(userId);
+
+    if (user.role !== "ngo") {
+        throw new ApiError(403, "Only NGO accounts have donation preferences.");
+    }
+
+    user.ngoPreferences = {
+        ...user.ngoPreferences?.toObject(),
+        ...preferences,
+    };
+
+    await user.save();
+
+    return user;
+};
+
 module.exports = {
     getProfile,
     uploadAvatar,
     uploadDocument,
     deleteDocument,
+    updateNgoPreferences,
 };

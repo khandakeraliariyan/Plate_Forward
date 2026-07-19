@@ -106,6 +106,46 @@ const userSchema = new mongoose.Schema(
             type: Date,
             select: false,
         },
+
+        // Only meaningful for role: "ngo" - used by the recommendation
+        // engine (Module 14) to score distance and food-type/quantity fit.
+        ngoPreferences: {
+            address: {
+                type: String,
+                default: "",
+            },
+
+            latitude: Number,
+
+            longitude: Number,
+
+            preferredFoodTypes: [
+                {
+                    type: String,
+                    enum: [
+                        "Cooked Meal",
+                        "Bakery",
+                        "Vegetables",
+                        "Fruits",
+                        "Dairy",
+                        "Beverages",
+                        "Snacks",
+                        "Frozen",
+                        "Other",
+                    ],
+                },
+            ],
+
+            maxDistanceKm: {
+                type: Number,
+                min: 1,
+            },
+
+            minQuantity: {
+                type: Number,
+                min: 0,
+            },
+        },
     },
     {
         timestamps: true,

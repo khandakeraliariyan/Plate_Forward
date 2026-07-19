@@ -3,6 +3,9 @@ const ApiError = require("../utils/ApiError");
 
 const userService = require("../services/user.service");
 
+const { ngoPreferencesSchema, recommendationsQuerySchema } = require("../validations/user.validation");
+const recommendationService = require("../services/recommendation.service");
+
 exports.getProfile = catchAsync(async (req, res) => {
     const user = await userService.getProfile(req.user._id);
 
@@ -54,5 +57,33 @@ exports.deleteDocument = catchAsync(async (req, res) => {
         success: true,
         message: "Document deleted successfully.",
         data: user,
+    });
+});
+
+exports.updateNgoPreferences = catchAsync(async (req, res) => {
+    const payload = ngoPreferencesSchema.parse(req.body);
+
+    const user = await userService.updateNgoPreferences(req.user._id, payload);
+
+    res.json({
+        success: true,
+        message: "Preferences updated successfully.",
+        data: user,
+    });
+});
+
+exports.getRecommendations = catchAsync(async (req, res) => {
+    const query = recommendationsQuerySchema.parse(req.query);
+
+    const result = await recommendationService.getRecommendations(
+        req.user._id,
+        query
+    );
+
+    res.json({
+        success: true,
+        message: "Recommendations fetched successfully.",
+        pagination: result.pagination,
+        data: result.recommendations,
     });
 });
