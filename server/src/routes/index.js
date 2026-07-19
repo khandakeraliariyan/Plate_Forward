@@ -20,4 +20,6 @@ router.use("/analytics", require("./analytics.routes"));
 
 router.use("/fraud", require("./fraud.routes"));
 
+router.use("/maps", require("./maps.routes"));
+
 module.exports = router;
