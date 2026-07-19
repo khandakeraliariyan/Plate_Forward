@@ -6,14 +6,16 @@ const authController = require("../controllers/auth.controller");
 
 const protect = require("../middlewares/auth");
 const authLimiter = require("../middlewares/authLimiter");
+const { verifyCsrfToken } = require("../middlewares/csrf");
 
 router.post("/register", authLimiter, authController.register);
 
 router.post("/login", authLimiter, authController.login);
 
-router.post("/refresh", authController.refresh);
+// Cookie-only auth (no Bearer token) - CSRF-protected via double-submit cookie.
+router.post("/refresh", verifyCsrfToken, authController.refresh);
 
-router.post("/logout", authController.logout);
+router.post("/logout", verifyCsrfToken, authController.logout);
 
 router.post("/logout-all", protect, authController.logoutAll);
 

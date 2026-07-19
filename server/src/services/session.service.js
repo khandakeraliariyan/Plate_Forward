@@ -61,10 +61,12 @@ const rotateSession = async (rawRefreshToken, { userAgent, ip } = {}) => {
 };
 
 const revokeSessionByToken = async (rawRefreshToken) => {
-    await Session.updateOne(
+    const session = await Session.findOneAndUpdate(
         { refreshTokenHash: hashToken(rawRefreshToken) },
         { revoked: true, revokedAt: new Date() }
     );
+
+    return session?.user ?? null;
 };
 
 const revokeSessionById = async (userId, sessionId) => {

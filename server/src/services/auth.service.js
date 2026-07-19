@@ -161,21 +161,35 @@ const refreshAccessToken = async (rawRefreshToken, context = {}) => {
     return { accessToken, refreshToken };
 };
 
-const logout = async (rawRefreshToken) => {
+const logout = async (rawRefreshToken, context = {}) => {
     if (rawRefreshToken) {
-        await sessionService.revokeSessionByToken(rawRefreshToken);
+        const userId = await sessionService.revokeSessionByToken(rawRefreshToken);
+
+        await auditLogService.record({
+            user: userId,
+            action: "LOGOUT",
+            ip: context.ip,
+            userAgent: context.userAgent,
+        });
     }
 };
 
-const logoutAll = async (userId) => {
+const logoutAll = async (userId, context = {}) => {
     await sessionService.revokeAllSessions(userId);
+
+    await auditLogService.record({
+        user: userId,
+        action: "LOGOUT_ALL",
+        ip: context.ip,
+        userAgent: context.userAgent,
+    });
 };
 
 const getMe = async (id) => {
     return await User.findById(id);
 };
 
-const verifyEmail = async (rawToken) => {
+const verifyEmail = async (rawToken, context = {}) => {
     const hashedToken = crypto
         .createHash("sha256")
         .update(rawToken)
@@ -197,6 +211,13 @@ const verifyEmail = async (rawToken) => {
     user.emailVerificationExpires = undefined;
 
     await user.save();
+
+    await auditLogService.record({
+        user: user._id,
+        action: "EMAIL_VERIFIED",
+        ip: context.ip,
+        userAgent: context.userAgent,
+    });
 
     return user;
 };

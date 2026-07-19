@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 const {
     register,
     login,
@@ -17,7 +19,7 @@ const {
 } = require("../validations/auth.validation");
 
 const catchAsync = require("../utils/catchAsync");
-const ApiError = require("../utils/ApiError");
+const { CSRF_COOKIE_NAME } = require("../middlewares/csrf");
 
 const REFRESH_COOKIE_NAME = "refreshToken";
 const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (upper bound - actual expiry is enforced server-side per Session)
@@ -27,21 +29,32 @@ const requestContext = (req) => ({
     userAgent: req.headers["user-agent"],
 });
 
+const cookieOptions = (extra = {}) => ({
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    ...extra,
+});
+
 const setRefreshCookie = (res, refreshToken) => {
-    res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: REFRESH_COOKIE_MAX_AGE_MS,
-    });
+    res.cookie(
+        REFRESH_COOKIE_NAME,
+        refreshToken,
+        cookieOptions({ httpOnly: true, maxAge: REFRESH_COOKIE_MAX_AGE_MS })
+    );
+
+    // Readable by the client on purpose (double-submit CSRF pattern) - it
+    // is not a secret on its own, it only proves the request came from a
+    // page that could read this origin's cookies.
+    res.cookie(
+        CSRF_COOKIE_NAME,
+        crypto.randomBytes(24).toString("hex"),
+        cookieOptions({ httpOnly: false, maxAge: REFRESH_COOKIE_MAX_AGE_MS })
+    );
 };
 
 const clearRefreshCookie = (res) => {
-    res.clearCookie(REFRESH_COOKIE_NAME, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-    });
+    res.clearCookie(REFRESH_COOKIE_NAME, cookieOptions({ httpOnly: true }));
+    res.clearCookie(CSRF_COOKIE_NAME, cookieOptions({ httpOnly: false }));
 };
 
 exports.register = catchAsync(async (req, res) => {
@@ -98,7 +111,7 @@ exports.refresh = catchAsync(async (req, res) => {
 exports.logout = catchAsync(async (req, res) => {
     const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
 
-    await logout(rawRefreshToken);
+    await logout(rawRefreshToken, requestContext(req));
 
     clearRefreshCookie(res);
 
@@ -109,7 +122,7 @@ exports.logout = catchAsync(async (req, res) => {
 });
 
 exports.logoutAll = catchAsync(async (req, res) => {
-    await logoutAll(req.user._id);
+    await logoutAll(req.user._id, requestContext(req));
 
     clearRefreshCookie(res);
 
@@ -127,7 +140,7 @@ exports.getMe = catchAsync(async (req, res) => {
 });
 
 exports.verifyEmail = catchAsync(async (req, res) => {
-    await verifyEmail(req.params.token);
+    await verifyEmail(req.params.token, requestContext(req));
 
     res.json({
         success: true,

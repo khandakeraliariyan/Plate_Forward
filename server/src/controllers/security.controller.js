@@ -40,6 +40,14 @@ exports.blockIp = catchAsync(async (req, res) => {
         durationMs
     );
 
+    await auditLogService.record({
+        user: req.user._id,
+        action: "ADMIN_IP_BLOCKED",
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { blockedIp: payload.ip, reason: payload.reason },
+    });
+
     res.status(201).json({
         success: true,
         message: "IP blocked successfully.",
@@ -49,6 +57,14 @@ exports.blockIp = catchAsync(async (req, res) => {
 
 exports.unblockIp = catchAsync(async (req, res) => {
     await ipSecurityService.unblockIp(req.params.ip);
+
+    await auditLogService.record({
+        user: req.user._id,
+        action: "ADMIN_IP_UNBLOCKED",
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { unblockedIp: req.params.ip },
+    });
 
     res.json({
         success: true,

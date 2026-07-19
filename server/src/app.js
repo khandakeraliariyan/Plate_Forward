@@ -17,6 +17,15 @@ const sanitizeRequest = require("./middlewares/sanitize");
 
 const app = express();
 
+// Off by default: only enable if actually deployed behind a reverse proxy /
+// load balancer (Nginx, Render, Heroku, etc.). Blindly trusting
+// X-Forwarded-For when there's no real proxy in front lets a client spoof
+// its own IP, which would defeat both rate limiting and IP blocking.
+// TRUST_PROXY is the number of hops to trust (e.g. "1" for a single proxy).
+if (process.env.TRUST_PROXY) {
+    app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
+}
+
 app.use(helmet());
 
 app.use(

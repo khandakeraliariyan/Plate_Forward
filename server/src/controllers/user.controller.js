@@ -3,6 +3,7 @@ const ApiError = require("../utils/ApiError");
 
 const userService = require("../services/user.service");
 const sessionService = require("../services/session.service");
+const auditLogService = require("../services/auditLog.service");
 
 const { ngoPreferencesSchema, recommendationsQuerySchema, volunteerProfileSchema } = require("../validations/user.validation");
 const recommendationService = require("../services/recommendation.service");
@@ -96,6 +97,14 @@ exports.getSessions = catchAsync(async (req, res) => {
 
 exports.revokeSession = catchAsync(async (req, res) => {
     await sessionService.revokeSessionById(req.user._id, req.params.sessionId);
+
+    await auditLogService.record({
+        user: req.user._id,
+        action: "SESSION_REVOKED",
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { sessionId: req.params.sessionId },
+    });
 
     res.json({
         success: true,
