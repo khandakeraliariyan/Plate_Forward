@@ -35,6 +35,41 @@ const userSchema = new mongoose.Schema(
             default: "",
         },
 
+        avatarPublicId: {
+            type: String,
+            default: "",
+        },
+
+        documents: [
+            {
+                url: {
+                    type: String,
+                    required: true,
+                },
+
+                publicId: {
+                    type: String,
+                    required: true,
+                },
+
+                resourceType: {
+                    type: String,
+                    enum: ["image", "raw"],
+                    default: "image",
+                },
+
+                label: {
+                    type: String,
+                    default: "",
+                },
+
+                uploadedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            },
+        ],
+
         phone: {
             type: String,
             default: "",

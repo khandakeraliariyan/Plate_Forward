@@ -5,6 +5,9 @@ const notificationService = require("./notification.service");
 const emailService = require("./email.service");
 const donationExpiredTemplate = require("../templates/donationExpired.template");
 const ApiError = require("../utils/ApiError");
+const storageService = require("./storage.service");
+
+const MAX_DONATION_IMAGES = 5;
 
 const { emitToRoom } = require("../socket");
 const { restaurantRoom, donationRoom, roleRoom } = require("../socket/rooms");
@@ -16,7 +19,7 @@ const {
 } = require("../socket/events");
 const { emitAdminStats, emitActivityFeed } = require("../socket/adminDashboard");
 
-const createDonation = async (userId, payload) => {
+const createDonation = async (userId, payload, files = []) => {
     const restaurant = await Restaurant.findOne({
         user: userId,
     });
@@ -25,9 +28,21 @@ const createDonation = async (userId, payload) => {
         throw new ApiError(404, "Restaurant profile not found.");
     }
 
+    if (files.length > MAX_DONATION_IMAGES) {
+        throw new ApiError(
+            400,
+            `A donation cannot have more than ${MAX_DONATION_IMAGES} images.`
+        );
+    }
+
+    const uploadedImages = files.length
+        ? await storageService.uploadFiles(files, "DONATION_IMAGE")
+        : [];
+
     const donation = await Donation.create({
         restaurant: restaurant._id,
         ...payload,
+        images: uploadedImages.map(({ url, publicId }) => ({ url, publicId })),
     });
 
     const admins = await User.find({
@@ -161,6 +176,10 @@ const deleteDonation = async (userId, donationId) => {
         );
     }
 
+    await storageService.deleteFiles(
+        donation.images.map((image) => image.publicId)
+    );
+
     await Donation.findByIdAndDelete(
         donationId
     );
@@ -173,6 +192,79 @@ const deleteDonation = async (userId, donationId) => {
     await emitAdminStats();
 
     return true;
+};
+
+const addDonationImages = async (userId, donationId, files) => {
+    const restaurant = await Restaurant.findOne({
+        user: userId,
+    });
+
+    if (!restaurant) {
+        throw new ApiError(404, "Restaurant profile not found.");
+    }
+
+    const donation = await Donation.findOne({
+        _id: donationId,
+        restaurant: restaurant._id,
+    });
+
+    if (!donation) {
+        throw new ApiError(404, "Donation not found.");
+    }
+
+    if (donation.images.length + files.length > MAX_DONATION_IMAGES) {
+        throw new ApiError(
+            400,
+            `A donation cannot have more than ${MAX_DONATION_IMAGES} images.`
+        );
+    }
+
+    const uploaded = await storageService.uploadFiles(files, "DONATION_IMAGE");
+
+    donation.images.push(
+        ...uploaded.map(({ url, publicId }) => ({ url, publicId }))
+    );
+
+    await donation.save();
+
+    emitToRoom(donationRoom(donation._id.toString()), DONATION_UPDATED, donation);
+
+    return donation;
+};
+
+const removeDonationImage = async (userId, donationId, imageId) => {
+    const restaurant = await Restaurant.findOne({
+        user: userId,
+    });
+
+    if (!restaurant) {
+        throw new ApiError(404, "Restaurant profile not found.");
+    }
+
+    const donation = await Donation.findOne({
+        _id: donationId,
+        restaurant: restaurant._id,
+    });
+
+    if (!donation) {
+        throw new ApiError(404, "Donation not found.");
+    }
+
+    const image = donation.images.id(imageId);
+
+    if (!image) {
+        throw new ApiError(404, "Image not found.");
+    }
+
+    await storageService.deleteFile(image.publicId);
+
+    donation.images.pull(imageId);
+
+    await donation.save();
+
+    emitToRoom(donationRoom(donation._id.toString()), DONATION_UPDATED, donation);
+
+    return donation;
 };
 
 const getAllDonations = async (query) => {
@@ -371,5 +463,7 @@ module.exports = {
     expireDonations,
     updateDonation,
     deleteDonation,
+    addDonationImages,
+    removeDonationImage,
     getAllDonations
 };

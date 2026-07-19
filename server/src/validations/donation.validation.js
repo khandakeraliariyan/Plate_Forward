@@ -17,7 +17,7 @@ const createDonationSchema = z.object({
         "Other",
     ]),
 
-    quantity: z.number().min(1),
+    quantity: z.coerce.number().min(1),
 
     unit: z.enum([
         "Plate",
@@ -39,9 +39,9 @@ const createDonationSchema = z.object({
 
     city: z.string().min(2),
 
-    latitude: z.number().optional(),
+    latitude: z.coerce.number().optional(),
 
-    longitude: z.number().optional(),
+    longitude: z.coerce.number().optional(),
 
     notes: z.string().optional(),
 });
