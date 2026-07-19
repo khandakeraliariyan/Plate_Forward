@@ -2,30 +2,86 @@ require("dotenv").config();
 
 const http = require("http");
 
-const app = require("./app");
+const app = require("./src/app");
 
-const connectDB = require("./config/db");
+const connectDB = require("./src/config/db");
 
-const startJobs = require("./jobs");
+const { verifyEmailConnection } = require("./src/config/email");
+
+const startJobs = require("./src/jobs");
 
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
-    await connectDB();
+    try {
+        // Connect MongoDB
+        await connectDB();
 
-    startJobs();
+        console.log("✅ MongoDB connected.");
 
-    const server = http.createServer(app);
+        // Verify Email Service
+        await verifyEmailConnection();
 
-    server.listen(PORT, () => {
-        console.log(`
-==========================================
-🚀 PlateForward API Started
-🌐 Port: ${PORT}
-📦 Environment: ${process.env.NODE_ENV}
-==========================================
-`);
-    });
+        // Start Background Jobs
+        startJobs();
+
+        // Create HTTP Server
+        const server = http.createServer(app);
+
+        server.listen(PORT, () => {
+            console.log(
+                `🚀 Server running on port ${PORT}`
+            );
+        });
+
+        server.on("error", (error) => {
+            console.error(
+                "Server Error:",
+                error
+            );
+        });
+
+        process.on(
+            "SIGINT",
+            async () => {
+                console.log(
+                    "\nGracefully shutting down..."
+                );
+
+                server.close(() => {
+                    console.log(
+                        "HTTP Server Closed."
+                    );
+
+                    process.exit(0);
+                });
+            }
+        );
+
+        process.on(
+            "SIGTERM",
+            async () => {
+                console.log(
+                    "\nSIGTERM received."
+                );
+
+                server.close(() => {
+                    console.log(
+                        "HTTP Server Closed."
+                    );
+
+                    process.exit(0);
+                });
+            }
+        );
+    } catch (error) {
+        console.error(
+            "Failed to start server:",
+            error
+        );
+
+        process.exit(1);
+    }
 };
 
 startServer();
