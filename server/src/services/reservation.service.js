@@ -142,9 +142,15 @@ const cancelReservation = async (reservationId, ngoId, payload) => {
     }
 };
 
-const getRestaurantReservations = async (restaurantId) => {
+const getRestaurantReservations = async (userId) => {
+    const restaurant = await Restaurant.findOne({ user: userId, });
+
+    if (!restaurant) {
+        throw new ApiError(404, "Restaurant profile not found.");
+    }
+
     return await Reservation.find({
-        restaurant: restaurantId,
+        restaurant: restaurant._id,
     })
         .populate(
             "ngo",
@@ -152,7 +158,7 @@ const getRestaurantReservations = async (restaurantId) => {
         )
         .populate(
             "volunteer",
-            "fullName email"
+            "fullName email avatar"
         )
         .populate("donation");
 };
