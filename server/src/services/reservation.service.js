@@ -277,6 +277,231 @@ const acceptReservation = async (reservationId, restaurantUserId) => {
     }
 };
 
+const pickupReservation = async (reservationId, volunteerId) => {
+    const session = await mongoose.startSession();
+
+    try {
+        session.startTransaction();
+
+        const reservation = await Reservation.findById(
+            reservationId
+        ).session(session);
+
+        if (!reservation) {
+            throw new ApiError(404, "Reservation not found.");
+        }
+
+        if (reservation.status !== "accepted") {
+            throw new ApiError(400, "Only accepted reservations can be picked up.");
+        }
+
+        // Assign volunteer if none assigned yet
+        if (!reservation.volunteer) {
+            reservation.volunteer = volunteerId;
+        }
+
+        // Prevent another volunteer from completing it
+        if (reservation.volunteer.toString() !== volunteerId.toString()) {
+            throw new ApiError(403, "This reservation is assigned to another volunteer.");
+        }
+
+        reservation.status = "picked_up";
+        reservation.pickedUpAt = new Date();
+
+        await reservation.save({
+            session,
+        });
+
+        await Donation.findByIdAndUpdate(
+            reservation.donation,
+            {
+                $set: {
+                    status: "picked_up",
+                },
+            },
+            {
+                session,
+            }
+        );
+
+        await session.commitTransaction();
+
+        return await Reservation.findById(
+            reservation._id
+        )
+            .populate(
+                "ngo",
+                "fullName email avatar"
+            )
+            .populate(
+                "restaurant",
+                "restaurantName"
+            )
+            .populate(
+                "volunteer",
+                "fullName email avatar"
+            )
+            .populate("donation");
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+const deliverReservation = async (reservationId, volunteerId) => {
+    const session = await mongoose.startSession();
+
+    try {
+        session.startTransaction();
+
+        const reservation = await Reservation.findById(
+            reservationId
+        ).session(session);
+
+        if (!reservation) {
+            throw new ApiError(404, "Reservation not found.");
+        }
+
+        if (reservation.status !== "picked_up") {
+            throw new ApiError(400, "Only picked up reservations can be delivered.");
+        }
+
+        if (!reservation.volunteer || reservation.volunteer.toString() !== volunteerId.toString()) {
+            throw new ApiError(403, "You are not assigned to this reservation.");
+        }
+
+        reservation.status = "delivered";
+
+        reservation.deliveredAt = new Date();
+
+        await reservation.save({ session });
+
+        await Donation.findByIdAndUpdate(
+            reservation.donation,
+            {
+                $set: {
+                    status: "delivered",
+                },
+            },
+            {
+                session,
+            }
+        );
+
+        await session.commitTransaction();
+
+        return await Reservation.findById(
+            reservation._id
+        )
+            .populate(
+                "ngo",
+                "fullName email avatar"
+            )
+            .populate(
+                "restaurant",
+                "restaurantName"
+            )
+            .populate(
+                "volunteer",
+                "fullName email avatar"
+            )
+            .populate("donation");
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+const completeReservation = async (reservationId, userId) => {
+    const session = await mongoose.startSession();
+
+    try {
+        session.startTransaction();
+
+        const reservation = await Reservation.findById(
+            reservationId
+        ).session(session);
+
+        if (!reservation) {
+            throw new ApiError(404, "Reservation not found.");
+        }
+
+        // Only delivered reservations can be completed
+        if (reservation.status !== "delivered") {
+            throw new ApiError(400, "Only delivered reservations can be completed.");
+        }
+
+        // Restaurant owner or Admin can complete
+        let authorized = false;
+
+        if (userId.role === "admin") {
+            authorized = true;
+        } else if (
+            userId.role === "restaurant"
+        ) {
+            const restaurant = await Restaurant.findOne({
+                user: userId._id,
+            }).session(session);
+
+            if (restaurant && restaurant._id.toString() === reservation.restaurant.toString()
+            ) {
+                authorized = true;
+            }
+        }
+
+        if (!authorized) {
+            throw new ApiError(403, "Unauthorized.");
+        }
+
+        reservation.status = "completed";
+
+        reservation.completedAt = new Date();
+
+        await reservation.save({ session });
+
+        await Donation.findByIdAndUpdate(
+            reservation.donation,
+            {
+                $set: {
+                    status:
+                        "completed",
+                },
+            },
+            {
+                session,
+            }
+        );
+
+        await session.commitTransaction();
+
+        return await Reservation.findById(
+            reservation._id
+        )
+            .populate(
+                "restaurant",
+                "restaurantName ownerName"
+            )
+            .populate(
+                "ngo",
+                "fullName email avatar"
+            )
+            .populate(
+                "volunteer",
+                "fullName email avatar"
+            )
+            .populate("donation");
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
 module.exports = {
     reserveDonation,
 
@@ -289,4 +514,10 @@ module.exports = {
     getReservationById,
 
     acceptReservation,
+
+    pickupReservation,
+
+    deliverReservation,
+
+    completeReservation
 };

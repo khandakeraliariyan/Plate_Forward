@@ -98,6 +98,7 @@ const donationSchema = new mongoose.Schema(
                 "available",
                 "reserved",
                 "picked_up",
+                "delivered",
                 "completed",
                 "cancelled",
                 "expired",
