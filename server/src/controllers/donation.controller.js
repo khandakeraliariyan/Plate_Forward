@@ -1,7 +1,5 @@
 const catchAsync = require("../utils/catchAsync");
 
-const { createDonationSchema } = require("../validations/donation.validation");
-
 const donationService = require("../services/donation.service");
 
 const { createDonationSchema, donationQuerySchema } = require("../validations/donation.validation");

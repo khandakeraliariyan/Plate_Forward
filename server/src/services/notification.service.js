@@ -4,6 +4,15 @@ const ApiError = require("../utils/ApiError");
 
 const emailService = require("./email.service");
 
+const { emitToRoom } = require("../socket");
+const { userRoom } = require("../socket/rooms");
+const {
+    NEW_NOTIFICATION,
+    NOTIFICATION_READ,
+    NOTIFICATION_DELETED,
+    UNREAD_COUNT_UPDATED,
+} = require("../socket/events");
+
 const createNotification = async ({
     user,
     title,
@@ -12,7 +21,7 @@ const createNotification = async ({
     priority = "medium",
     data = {},
 }) => {
-    return await Notification.create({
+    const notification = await Notification.create({
         user,
         title,
         message,
@@ -20,6 +29,16 @@ const createNotification = async ({
         priority,
         data,
     });
+
+    const room = userRoom(user);
+
+    emitToRoom(room, NEW_NOTIFICATION, notification);
+
+    emitToRoom(room, UNREAD_COUNT_UPDATED, {
+        count: await getUnreadCount(user),
+    });
+
+    return notification;
 };
 
 const getMyNotifications = async (userId, page = 1, limit = 20) => {
@@ -75,6 +94,14 @@ const markAsRead = async (notificationId, userId) => {
 
     await notification.save();
 
+    const room = userRoom(userId);
+
+    emitToRoom(room, NOTIFICATION_READ, notification);
+
+    emitToRoom(room, UNREAD_COUNT_UPDATED, {
+        count: await getUnreadCount(userId),
+    });
+
     return notification;
 };
 
@@ -88,6 +115,10 @@ const markAllAsRead = async (userId) => {
             isRead: true,
         }
     );
+
+    emitToRoom(userRoom(userId), UNREAD_COUNT_UPDATED, {
+        count: 0,
+    });
 
     return {
         success: true,
@@ -108,6 +139,16 @@ const deleteNotification = async (notificationId, userId) => {
             "Notification not found."
         );
     }
+
+    const room = userRoom(userId);
+
+    emitToRoom(room, NOTIFICATION_DELETED, {
+        id: notificationId,
+    });
+
+    emitToRoom(room, UNREAD_COUNT_UPDATED, {
+        count: await getUnreadCount(userId),
+    });
 
     return notification;
 };

@@ -18,6 +18,26 @@ const generateQRCode = require("../utils/generateQRCode");
 
 const mongoose = require("mongoose");
 
+const { emitToRoom } = require("../socket");
+const {
+    userRoom,
+    restaurantRoom,
+    reservationRoom,
+    donationRoom,
+} = require("../socket/rooms");
+const {
+    RESERVATION_CREATED,
+    RESERVATION_ACCEPTED,
+    VOLUNTEER_ASSIGNED,
+    FOOD_PICKED_UP,
+    FOOD_DELIVERED,
+    RESERVATION_COMPLETED,
+    RESERVATION_CANCELLED,
+    DONATION_RESERVED,
+    DONATION_COMPLETED,
+} = require("../socket/events");
+const { emitAdminStats, emitActivityFeed } = require("../socket/adminDashboard");
+
 const reserveDonation = async (donationId, ngoId, payload) => {
     const session = await mongoose.startSession();
 
@@ -105,6 +125,26 @@ const reserveDonation = async (donationId, ngoId, payload) => {
             },
         });
 
+        emitToRoom(
+            restaurantRoom(reservation[0].restaurant.toString()),
+            RESERVATION_CREATED,
+            reservation[0]
+        );
+
+        emitToRoom(
+            donationRoom(reservation[0].donation.toString()),
+            DONATION_RESERVED,
+            { donationId: reservation[0].donation, reservationId: reservation[0]._id }
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_CREATED,
+            message: "An NGO reserved a food donation.",
+            data: { reservationId: reservation[0]._id },
+        });
+
         return reservation[0];
     } catch (error) {
         await session.abortTransaction();
@@ -184,6 +224,26 @@ const cancelReservation = async (reservationId, ngoId, payload) => {
             data: {
                 reservation: reservation._id,
             },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_CANCELLED,
+            reservation
+        );
+
+        emitToRoom(
+            restaurantRoom(reservation.restaurant.toString()),
+            RESERVATION_CANCELLED,
+            reservation
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_CANCELLED,
+            message: "An NGO cancelled a reservation.",
+            data: { reservationId: reservation._id },
         });
 
         return reservation;
@@ -340,6 +400,26 @@ const acceptReservation = async (reservationId, restaurantUserId) => {
             },
         });
 
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_ACCEPTED,
+            reservation
+        );
+
+        emitToRoom(
+            userRoom(reservation.ngo.toString()),
+            RESERVATION_ACCEPTED,
+            reservation
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_ACCEPTED,
+            message: `${restaurant.restaurantName} accepted a reservation.`,
+            data: { reservationId: reservation._id },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -447,6 +527,32 @@ const pickupReservation = async (reservationId, volunteerId) => {
             },
         });
 
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            VOLUNTEER_ASSIGNED,
+            { reservationId: reservation._id, volunteer }
+        );
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            FOOD_PICKED_UP,
+            reservation
+        );
+
+        emitToRoom(
+            donationRoom(reservation.donation.toString()),
+            DONATION_RESERVED,
+            { donationId: reservation.donation, status: "picked_up" }
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: FOOD_PICKED_UP,
+            message: `${volunteer.fullName} picked up a food donation.`,
+            data: { reservationId: reservation._id },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -548,6 +654,20 @@ const deliverReservation = async (reservationId, volunteerId) => {
             data: {
                 ngoName: ngo.fullName,
             },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            FOOD_DELIVERED,
+            reservation
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: FOOD_DELIVERED,
+            message: "Food was delivered to an NGO.",
+            data: { reservationId: reservation._id },
         });
 
         return await Reservation.findById(
@@ -671,6 +791,26 @@ const completeReservation = async (reservationId, userId) => {
             data: {
                 restaurantName: restaurant.restaurantName,
             },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_COMPLETED,
+            reservation
+        );
+
+        emitToRoom(
+            donationRoom(reservation.donation.toString()),
+            DONATION_COMPLETED,
+            { donationId: reservation.donation }
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_COMPLETED,
+            message: `${restaurant.restaurantName}'s donation was completed.`,
+            data: { reservationId: reservation._id },
         });
 
         return await Reservation.findById(

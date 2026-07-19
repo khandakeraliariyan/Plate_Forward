@@ -6,6 +6,16 @@ const emailService = require("./email.service");
 const donationExpiredTemplate = require("../templates/donationExpired.template");
 const ApiError = require("../utils/ApiError");
 
+const { emitToRoom } = require("../socket");
+const { restaurantRoom, donationRoom, roleRoom } = require("../socket/rooms");
+const {
+    DONATION_CREATED,
+    DONATION_UPDATED,
+    DONATION_DELETED,
+    DONATION_EXPIRED,
+} = require("../socket/events");
+const { emitAdminStats, emitActivityFeed } = require("../socket/adminDashboard");
+
 const createDonation = async (userId, payload) => {
     const restaurant = await Restaurant.findOne({
         user: userId,
@@ -37,6 +47,17 @@ const createDonation = async (userId, payload) => {
             },
         });
     }
+
+    emitToRoom(roleRoom("ngo"), DONATION_CREATED, donation);
+    emitToRoom(restaurantRoom(restaurant._id.toString()), DONATION_CREATED, donation);
+
+    await emitAdminStats();
+
+    emitActivityFeed({
+        type: DONATION_CREATED,
+        message: `${restaurant.restaurantName} published a new donation.`,
+        data: { donationId: donation._id },
+    });
 
     return donation;
 };
@@ -104,6 +125,9 @@ const updateDonation = async (userId, donationId, payload) => {
 
     await donation.save();
 
+    emitToRoom(donationRoom(donation._id.toString()), DONATION_UPDATED, donation);
+    emitToRoom(roleRoom("ngo"), DONATION_UPDATED, donation);
+
     return donation;
 };
 
@@ -140,6 +164,13 @@ const deleteDonation = async (userId, donationId) => {
     await Donation.findByIdAndDelete(
         donationId
     );
+
+    emitToRoom(donationRoom(donationId.toString()), DONATION_DELETED, {
+        donationId,
+    });
+    emitToRoom(roleRoom("ngo"), DONATION_DELETED, { donationId });
+
+    await emitAdminStats();
 
     return true;
 };
@@ -310,7 +341,25 @@ const expireDonations = async () => {
             template: donationExpiredTemplate,
             data: {},
         });
+
+        emitToRoom(donationRoom(donation._id.toString()), DONATION_EXPIRED, {
+            donationId: donation._id,
+        });
+
+        emitToRoom(
+            restaurantRoom(restaurant._id.toString()),
+            DONATION_EXPIRED,
+            { donationId: donation._id }
+        );
+
+        emitActivityFeed({
+            type: DONATION_EXPIRED,
+            message: `A donation from ${restaurant.restaurantName} expired.`,
+            data: { donationId: donation._id },
+        });
     }
+
+    await emitAdminStats();
 
     return { count: expiredDonations.length };
 };
