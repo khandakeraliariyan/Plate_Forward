@@ -1,10 +1,15 @@
 const cron = require("node-cron");
 
-const Donation = require("../models/donation.model");
-const Reservation = require("../models/reservation.model");
-const Restaurant = require("../models/restaurant.model");
+const Donation = require("../models/Donation");
+const Reservation = require("../models/Reservation");
+const Restaurant = require("../models/Restaurant");
 
 const notificationService = require("../services/notification.service");
+
+const { emitToRoom } = require("../socket");
+const { restaurantRoom, reservationRoom, donationRoom } = require("../socket/rooms");
+const { RESERVATION_EXPIRED, DONATION_UPDATED } = require("../socket/events");
+const { emitAdminStats, emitActivityFeed } = require("../socket/adminDashboard");
 
 module.exports = () => {
     cron.schedule("* * * * *", async () => {
@@ -77,7 +82,35 @@ module.exports = () => {
                         }
                     );
                 }
+
+                emitToRoom(
+                    reservationRoom(reservation._id.toString()),
+                    RESERVATION_EXPIRED,
+                    reservation
+                );
+
+                if (restaurant) {
+                    emitToRoom(
+                        restaurantRoom(restaurant._id.toString()),
+                        RESERVATION_EXPIRED,
+                        reservation
+                    );
+                }
+
+                emitToRoom(
+                    donationRoom(reservation.donation.toString()),
+                    DONATION_UPDATED,
+                    { donationId: reservation.donation, status: "available" }
+                );
+
+                emitActivityFeed({
+                    type: RESERVATION_EXPIRED,
+                    message: "A reservation expired before being accepted.",
+                    data: { reservationId: reservation._id },
+                });
             }
+
+            await emitAdminStats();
 
             console.log(
                 `[Reservation Expiry] Processed ${reservations.length} reservation(s).`

@@ -31,10 +31,34 @@ const restaurantSchema = new mongoose.Schema(
             default: "",
         },
 
+        logoPublicId: {
+            type: String,
+            default: "",
+        },
+
         coverImage: {
             type: String,
             default: "",
         },
+
+        coverImagePublicId: {
+            type: String,
+            default: "",
+        },
+
+        gallery: [
+            {
+                url: {
+                    type: String,
+                    required: true,
+                },
+
+                publicId: {
+                    type: String,
+                    required: true,
+                },
+            },
+        ],
 
         phone: {
             type: String,

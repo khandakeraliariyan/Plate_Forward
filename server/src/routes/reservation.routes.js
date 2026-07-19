@@ -20,11 +20,21 @@ router.get("/restaurant", authorize("restaurant"), reservationController.getRest
 
 router.patch("/:reservationId/accept", authorize("restaurant"), reservationController.acceptReservation);
 
+router.patch("/:reservationId/reject", authorize("restaurant"), reservationController.rejectReservation);
+
 router.patch("/:reservationId/complete", authorize("restaurant", "admin"), reservationController.completeReservation);
 
 router.patch("/:reservationId/pickup", authorize("volunteer"), reservationController.pickupReservation);
 
 router.patch("/:reservationId/deliver", authorize("volunteer"), reservationController.deliverReservation);
+
+router.post("/:reservationId/rating", authorize("ngo"), reservationController.rateReservation);
+
+router.get(
+    "/:reservationId/suggested-volunteers",
+    authorize("restaurant", "admin"),
+    reservationController.getSuggestedVolunteers
+);
 
 router.get("/:reservationId", reservationController.getReservationById);
 

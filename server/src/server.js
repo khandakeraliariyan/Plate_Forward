@@ -10,6 +10,8 @@ const { verifyEmailConnection } = require("./src/config/email");
 
 const startJobs = require("./src/jobs");
 
+const { initSocket, shutdownSocket } = require("./src/socket");
+
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
@@ -28,6 +30,11 @@ const startServer = async () => {
         // Create HTTP Server
         const server = http.createServer(app);
 
+        // Initialize Socket.IO
+        initSocket(server);
+
+        console.log("✅ Socket.IO initialized.");
+
         server.listen(PORT, () => {
             console.log(
                 `🚀 Server running on port ${PORT}`
@@ -41,39 +48,23 @@ const startServer = async () => {
             );
         });
 
-        process.on(
-            "SIGINT",
-            async () => {
-                console.log(
-                    "\nGracefully shutting down..."
-                );
+        const gracefulShutdown = async (signal) => {
+            console.log(`\n${signal} received. Gracefully shutting down...`);
 
-                server.close(() => {
-                    console.log(
-                        "HTTP Server Closed."
-                    );
+            await shutdownSocket();
 
-                    process.exit(0);
-                });
-            }
-        );
+            console.log("Socket.IO Closed.");
 
-        process.on(
-            "SIGTERM",
-            async () => {
-                console.log(
-                    "\nSIGTERM received."
-                );
+            server.close(() => {
+                console.log("HTTP Server Closed.");
 
-                server.close(() => {
-                    console.log(
-                        "HTTP Server Closed."
-                    );
+                process.exit(0);
+            });
+        };
 
-                    process.exit(0);
-                });
-            }
-        );
+        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     } catch (error) {
         console.error(
             "Failed to start server:",

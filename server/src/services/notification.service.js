@@ -1,6 +1,17 @@
 const Notification = require("../models/notification.model");
-const User = require("../models/user.model");
+const User = require("../models/User");
 const ApiError = require("../utils/ApiError");
+
+const emailService = require("./email.service");
+
+const { emitToRoom } = require("../socket");
+const { userRoom } = require("../socket/rooms");
+const {
+    NEW_NOTIFICATION,
+    NOTIFICATION_READ,
+    NOTIFICATION_DELETED,
+    UNREAD_COUNT_UPDATED,
+} = require("../socket/events");
 
 const createNotification = async ({
     user,
@@ -10,7 +21,7 @@ const createNotification = async ({
     priority = "medium",
     data = {},
 }) => {
-    return await Notification.create({
+    const notification = await Notification.create({
         user,
         title,
         message,
@@ -18,6 +29,16 @@ const createNotification = async ({
         priority,
         data,
     });
+
+    const room = userRoom(user);
+
+    emitToRoom(room, NEW_NOTIFICATION, notification);
+
+    emitToRoom(room, UNREAD_COUNT_UPDATED, {
+        count: await getUnreadCount(user),
+    });
+
+    return notification;
 };
 
 const getMyNotifications = async (userId, page = 1, limit = 20) => {
@@ -73,6 +94,14 @@ const markAsRead = async (notificationId, userId) => {
 
     await notification.save();
 
+    const room = userRoom(userId);
+
+    emitToRoom(room, NOTIFICATION_READ, notification);
+
+    emitToRoom(room, UNREAD_COUNT_UPDATED, {
+        count: await getUnreadCount(userId),
+    });
+
     return notification;
 };
 
@@ -86,6 +115,10 @@ const markAllAsRead = async (userId) => {
             isRead: true,
         }
     );
+
+    emitToRoom(userRoom(userId), UNREAD_COUNT_UPDATED, {
+        count: 0,
+    });
 
     return {
         success: true,
@@ -107,6 +140,16 @@ const deleteNotification = async (notificationId, userId) => {
         );
     }
 
+    const room = userRoom(userId);
+
+    emitToRoom(room, NOTIFICATION_DELETED, {
+        id: notificationId,
+    });
+
+    emitToRoom(room, UNREAD_COUNT_UPDATED, {
+        count: await getUnreadCount(userId),
+    });
+
     return notification;
 };
 
@@ -125,7 +168,7 @@ const broadcastNotification = async ({
         };
     }
 
-    const users = await User.find(filter).select("_id");
+    const users = await User.find(filter).select("_id email");
 
     const notifications = users.map((user) => ({
         user: user._id,
@@ -136,6 +179,12 @@ const broadcastNotification = async ({
     }));
 
     await Notification.insertMany(notifications);
+
+    await emailService.sendBulkEmail({
+        recipients: users.map((u) => u.email),
+        subject: title,
+        html: message,
+    });
 
     return {
         sent: notifications.length,

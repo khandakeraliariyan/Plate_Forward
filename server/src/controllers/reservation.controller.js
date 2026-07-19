@@ -1,8 +1,9 @@
 const catchAsync = require("../utils/catchAsync");
 
-const { reserveDonationSchema, cancelReservationSchema, } = require("../validations/reservation.validation");
+const { reserveDonationSchema, cancelReservationSchema, rateReservationSchema, rejectReservationSchema, } = require("../validations/reservation.validation");
 
 const reservationService = require("../services/reservation.service");
+const volunteerMatchingService = require("../services/volunteerMatching.service");
 
 exports.reserveDonation = catchAsync(async (req, res) => {
     const payload = reserveDonationSchema.parse(req.body);
@@ -39,6 +40,22 @@ exports.cancelReservation = catchAsync(async (req, res) => {
     });
 }
 );
+
+exports.rejectReservation = catchAsync(async (req, res) => {
+    const payload = rejectReservationSchema.parse(req.body);
+
+    const reservation = await reservationService.rejectReservation(
+        req.params.reservationId,
+        req.user._id,
+        payload
+    );
+
+    res.status(200).json({
+        success: true,
+        message: "Reservation rejected.",
+        data: reservation,
+    });
+});
 
 exports.getRestaurantReservations = catchAsync(async (req, res) => {
     const reservations = await reservationService.getRestaurantReservations(
@@ -129,6 +146,33 @@ exports.completeReservation = catchAsync(async (req, res) => {
         success: true,
         message:
             "Reservation completed.",
+        data: reservation,
+    });
+});
+
+exports.getSuggestedVolunteers = catchAsync(async (req, res) => {
+    const suggestions = await volunteerMatchingService.getSuggestedVolunteers(
+        req.params.reservationId
+    );
+
+    res.status(200).json({
+        success: true,
+        data: suggestions,
+    });
+});
+
+exports.rateReservation = catchAsync(async (req, res) => {
+    const payload = rateReservationSchema.parse(req.body);
+
+    const reservation = await reservationService.rateReservation(
+        req.params.reservationId,
+        req.user._id,
+        payload
+    );
+
+    res.status(200).json({
+        success: true,
+        message: "Reservation rated successfully.",
         data: reservation,
     });
 });

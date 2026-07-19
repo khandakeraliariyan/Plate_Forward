@@ -1,8 +1,16 @@
 const Donation = require("../models/Donation");
 const Reservation = require("../models/Reservation");
 const Restaurant = require("../models/Restaurant");
+const User = require("../models/User");
 
 const notificationService = require("./notification.service");
+const emailService = require("./email.service");
+
+const reservationAcceptedTemplate = require("../templates/reservationAccepted.template");
+const foodPickedUpTemplate = require("../templates/foodPickedUp.template");
+const foodDeliveredTemplate = require("../templates/foodDelivered.template");
+const reservationCompletedTemplate = require("../templates/reservationCompleted.template");
+const reservationCancelledTemplate = require("../templates/reservationCancelled.template");
 
 const ApiError = require("../utils/ApiError");
 
@@ -10,6 +18,27 @@ const generatePickupCode = require("../utils/generatePickupCode");
 const generateQRCode = require("../utils/generateQRCode");
 
 const mongoose = require("mongoose");
+
+const { emitToRoom } = require("../socket");
+const {
+    userRoom,
+    restaurantRoom,
+    reservationRoom,
+    donationRoom,
+} = require("../socket/rooms");
+const {
+    RESERVATION_CREATED,
+    RESERVATION_ACCEPTED,
+    VOLUNTEER_ASSIGNED,
+    FOOD_PICKED_UP,
+    FOOD_DELIVERED,
+    RESERVATION_COMPLETED,
+    RESERVATION_CANCELLED,
+    RESERVATION_REJECTED,
+    DONATION_RESERVED,
+    DONATION_COMPLETED,
+} = require("../socket/events");
+const { emitAdminStats, emitActivityFeed } = require("../socket/adminDashboard");
 
 const reserveDonation = async (donationId, ngoId, payload) => {
     const session = await mongoose.startSession();
@@ -98,6 +127,26 @@ const reserveDonation = async (donationId, ngoId, payload) => {
             },
         });
 
+        emitToRoom(
+            restaurantRoom(reservation[0].restaurant.toString()),
+            RESERVATION_CREATED,
+            reservation[0]
+        );
+
+        emitToRoom(
+            donationRoom(reservation[0].donation.toString()),
+            DONATION_RESERVED,
+            { donationId: reservation[0].donation, reservationId: reservation[0]._id }
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_CREATED,
+            message: "An NGO reserved a food donation.",
+            data: { reservationId: reservation[0]._id },
+        });
+
         return reservation[0];
     } catch (error) {
         await session.abortTransaction();
@@ -177,6 +226,143 @@ const cancelReservation = async (reservationId, ngoId, payload) => {
             data: {
                 reservation: reservation._id,
             },
+        });
+
+        if (restaurant.user) {
+            await emailService.sendTemplateEmail({
+                to: restaurant.user.email,
+                subject: "Reservation Cancelled",
+                template: reservationCancelledTemplate,
+                data: {
+                    name: restaurant.restaurantName,
+                    reservationCode: reservation.pickupCode,
+                    reason: reservation.cancellationReason,
+                },
+            });
+        }
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_CANCELLED,
+            reservation
+        );
+
+        emitToRoom(
+            restaurantRoom(reservation.restaurant.toString()),
+            RESERVATION_CANCELLED,
+            reservation
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_CANCELLED,
+            message: "An NGO cancelled a reservation.",
+            data: { reservationId: reservation._id },
+        });
+
+        return reservation;
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+// Restaurant-initiated decline of a pending reservation request, distinct
+// from cancelReservation (NGO-initiated). Only applies before the
+// restaurant has accepted - once accepted, the restaurant is committed to
+// the existing accept/pickup/deliver/complete workflow.
+const rejectReservation = async (reservationId, restaurantUserId, { reason } = {}) => {
+    const session = await mongoose.startSession();
+
+    try {
+        session.startTransaction();
+
+        const restaurant = await Restaurant.findOne({
+            user: restaurantUserId,
+        }).session(session);
+
+        if (!restaurant) {
+            throw new ApiError(404, "Restaurant profile not found.");
+        }
+
+        const reservation = await Reservation.findById(
+            reservationId
+        ).session(session);
+
+        if (!reservation) {
+            throw new ApiError(404, "Reservation not found.");
+        }
+
+        if (reservation.restaurant.toString() !== restaurant._id.toString()) {
+            throw new ApiError(403, "Unauthorized.");
+        }
+
+        if (reservation.status !== "reserved") {
+            throw new ApiError(
+                400,
+                "Only pending reservations can be rejected."
+            );
+        }
+
+        reservation.status = "cancelled";
+        reservation.cancelledAt = new Date();
+        reservation.cancellationReason = reason || "Rejected by restaurant.";
+
+        await reservation.save({ session });
+
+        await Donation.findByIdAndUpdate(
+            reservation.donation,
+            {
+                $set: {
+                    status: "available",
+                },
+            },
+            { session }
+        );
+
+        await session.commitTransaction();
+
+        const ngo = await User.findById(reservation.ngo);
+
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Reservation Declined",
+            message: `${restaurant.restaurantName} declined your reservation request.`,
+            type: "RESERVATION_CANCELLED",
+            priority: "high",
+            data: { reservation: reservation._id },
+        });
+
+        if (ngo) {
+            await emailService.sendTemplateEmail({
+                to: ngo.email,
+                subject: "Reservation Declined",
+                template: reservationCancelledTemplate,
+                data: {
+                    name: ngo.fullName,
+                    reservationCode: reservation.pickupCode,
+                    reason: reservation.cancellationReason,
+                },
+            });
+        }
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_REJECTED,
+            reservation
+        );
+
+        emitToRoom(userRoom(reservation.ngo.toString()), RESERVATION_REJECTED, reservation);
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_REJECTED,
+            message: `${restaurant.restaurantName} declined a reservation.`,
+            data: { reservationId: reservation._id },
         });
 
         return reservation;
@@ -321,6 +507,38 @@ const acceptReservation = async (reservationId, restaurantUserId) => {
             },
         });
 
+        const ngo = await User.findById(reservation.ngo);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Reservation Accepted",
+            template: reservationAcceptedTemplate,
+            data: {
+                ngoName: ngo.fullName,
+                restaurantName: restaurant.restaurantName,
+            },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_ACCEPTED,
+            reservation
+        );
+
+        emitToRoom(
+            userRoom(reservation.ngo.toString()),
+            RESERVATION_ACCEPTED,
+            reservation
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_ACCEPTED,
+            message: `${restaurant.restaurantName} accepted a reservation.`,
+            data: { reservationId: reservation._id },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -416,6 +634,44 @@ const pickupReservation = async (reservationId, volunteerId) => {
             },
         });
 
+        const ngo = await User.findById(reservation.ngo);
+        const volunteer = await User.findById(reservation.volunteer);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Food Picked Up",
+            template: foodPickedUpTemplate,
+            data: {
+                volunteerName: volunteer.fullName,
+            },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            VOLUNTEER_ASSIGNED,
+            { reservationId: reservation._id, volunteer }
+        );
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            FOOD_PICKED_UP,
+            reservation
+        );
+
+        emitToRoom(
+            donationRoom(reservation.donation.toString()),
+            DONATION_RESERVED,
+            { donationId: reservation.donation, status: "picked_up" }
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: FOOD_PICKED_UP,
+            message: `${volunteer.fullName} picked up a food donation.`,
+            data: { reservationId: reservation._id },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -506,6 +762,31 @@ const deliverReservation = async (reservationId, volunteerId) => {
             data: {
                 reservation: reservation._id,
             },
+        });
+
+        const ngo = await User.findById(reservation.ngo);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Food Delivered",
+            template: foodDeliveredTemplate,
+            data: {
+                ngoName: ngo.fullName,
+            },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            FOOD_DELIVERED,
+            reservation
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: FOOD_DELIVERED,
+            message: "Food was delivered to an NGO.",
+            data: { reservationId: reservation._id },
         });
 
         return await Reservation.findById(
@@ -620,6 +901,37 @@ const completeReservation = async (reservationId, userId) => {
             },
         });
 
+        const ngo = await User.findById(reservation.ngo);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Reservation Completed",
+            template: reservationCompletedTemplate,
+            data: {
+                restaurantName: restaurant.restaurantName,
+            },
+        });
+
+        emitToRoom(
+            reservationRoom(reservation._id.toString()),
+            RESERVATION_COMPLETED,
+            reservation
+        );
+
+        emitToRoom(
+            donationRoom(reservation.donation.toString()),
+            DONATION_COMPLETED,
+            { donationId: reservation.donation }
+        );
+
+        await emitAdminStats();
+
+        emitActivityFeed({
+            type: RESERVATION_COMPLETED,
+            message: `${restaurant.restaurantName}'s donation was completed.`,
+            data: { reservationId: reservation._id },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -644,10 +956,49 @@ const completeReservation = async (reservationId, userId) => {
     }
 };
 
+const rateReservation = async (reservationId, ngoId, { score, comment }) => {
+    const reservation = await Reservation.findById(reservationId);
+
+    if (!reservation) {
+        throw new ApiError(404, "Reservation not found.");
+    }
+
+    if (reservation.ngo.toString() !== ngoId.toString()) {
+        throw new ApiError(403, "Unauthorized.");
+    }
+
+    if (!["delivered", "completed"].includes(reservation.status)) {
+        throw new ApiError(
+            400,
+            "Only delivered or completed reservations can be rated."
+        );
+    }
+
+    if (!reservation.volunteer) {
+        throw new ApiError(400, "This reservation has no assigned volunteer.");
+    }
+
+    if (reservation.rating?.score) {
+        throw new ApiError(400, "This reservation has already been rated.");
+    }
+
+    reservation.rating = {
+        score,
+        comment: comment || "",
+        ratedAt: new Date(),
+    };
+
+    await reservation.save();
+
+    return reservation;
+};
+
 module.exports = {
     reserveDonation,
 
     cancelReservation,
+
+    rejectReservation,
 
     getRestaurantReservations,
 
@@ -661,5 +1012,7 @@ module.exports = {
 
     deliverReservation,
 
-    completeReservation
+    completeReservation,
+
+    rateReservation
 };

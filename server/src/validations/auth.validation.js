@@ -14,9 +14,28 @@ const loginSchema = z.object({
     email: z.string().email(),
 
     password: z.string().min(6),
+
+    rememberMe: z.boolean().optional(),
+});
+
+const forgotPasswordSchema = z.object({
+    email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+    password: z.string().min(6),
+});
+
+const changePasswordSchema = z.object({
+    currentPassword: z.string().min(6),
+
+    newPassword: z.string().min(6),
 });
 
 module.exports = {
     registerSchema,
     loginSchema,
+    forgotPasswordSchema,
+    resetPasswordSchema,
+    changePasswordSchema,
 };
