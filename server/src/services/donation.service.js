@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const Donation = require("../models/Donation");
 const Restaurant = require("../models/Restaurant");
 const User = require("../models/User");
@@ -267,6 +269,28 @@ const removeDonationImage = async (userId, donationId, imageId) => {
     return donation;
 };
 
+const buildSortStage = (sort, hasGeo, hasSearch) => {
+    switch (sort) {
+        case "oldest":
+            return { createdAt: 1 };
+
+        case "expiry":
+            return { expiryTime: 1 };
+
+        case "quantity":
+            return { quantity: -1 };
+
+        case "distance":
+            return hasGeo ? { distance: 1 } : { createdAt: -1 };
+
+        case "relevance":
+            return hasSearch ? { score: -1 } : { createdAt: -1 };
+
+        default:
+            return { createdAt: -1 };
+    }
+};
+
 const getAllDonations = async (query) => {
     const {
         page = 1,
@@ -275,99 +299,192 @@ const getAllDonations = async (query) => {
         city,
         foodType,
         status = "available",
+        restaurant,
+        lat,
+        lng,
+        radius,
+        minQuantity,
+        maxQuantity,
+        expiryBefore,
+        expiryAfter,
+        availableNow,
         sort = "newest",
     } = query;
 
-    const filter = {};
+    const currentPage = Math.max(parseInt(page, 10) || 1, 1);
+
+    const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 100);
+
+    const skip = (currentPage - 1) * pageSize;
+
+    const hasGeo = lat !== undefined && lng !== undefined;
+
+    // Non-geospatial filters shared by every code path. $geoNear requires
+    // these to live inside its own `query` option rather than a separate
+    // $match stage, since $geoNear must be the pipeline's first stage.
+    const matchFilter = {};
 
     if (status) {
-        filter.status = status;
+        matchFilter.status = status;
     }
 
     if (city) {
-        filter.city = {
+        matchFilter.city = {
             $regex: city,
             $options: "i",
         };
     }
 
     if (foodType) {
-        filter.foodType = foodType;
+        matchFilter.foodType = foodType;
     }
 
-    if (search) {
-        filter.$or = [
-            {
-                title: {
-                    $regex: search,
-                    $options: "i",
-                },
-            },
-            {
-                description: {
-                    $regex: search,
-                    $options: "i",
-                },
-            },
-        ];
+    if (restaurant) {
+        matchFilter.restaurant = new mongoose.Types.ObjectId(restaurant);
     }
 
-    let sortOption = {};
+    if (minQuantity !== undefined || maxQuantity !== undefined) {
+        matchFilter.quantity = {};
 
-    switch (sort) {
-        case "oldest":
-            sortOption = {
-                createdAt: 1,
-            };
-            break;
+        if (minQuantity !== undefined) {
+            matchFilter.quantity.$gte = minQuantity;
+        }
 
-        case "expiry":
-            sortOption = {
+        if (maxQuantity !== undefined) {
+            matchFilter.quantity.$lte = maxQuantity;
+        }
+    }
+
+    if (expiryBefore || expiryAfter) {
+        matchFilter.expiryTime = {};
+
+        if (expiryAfter) {
+            matchFilter.expiryTime.$gte = new Date(expiryAfter);
+        }
+
+        if (expiryBefore) {
+            matchFilter.expiryTime.$lte = new Date(expiryBefore);
+        }
+    }
+
+    if (availableNow) {
+        const now = new Date();
+
+        matchFilter.status = "available";
+        matchFilter.pickupStartTime = { $lte: now };
+        matchFilter.pickupEndTime = { $gte: now };
+    }
+
+    const pipeline = [];
+
+    // $text and $geoNear each require being the pipeline's first stage, so
+    // a text search combined with a geo radius falls back to a case
+    // insensitive regex match instead of full-text relevance scoring.
+    if (hasGeo) {
+        const geoNearStage = {
+            near: {
+                type: "Point",
+                coordinates: [lng, lat],
+            },
+            distanceField: "distance",
+            spherical: true,
+            query: matchFilter,
+        };
+
+        if (radius) {
+            geoNearStage.maxDistance = radius * 1000; // km -> meters
+        }
+
+        pipeline.push({ $geoNear: geoNearStage });
+
+        if (search) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { title: { $regex: search, $options: "i" } },
+                        { description: { $regex: search, $options: "i" } },
+                    ],
+                },
+            });
+        }
+    } else if (search) {
+        pipeline.push({
+            $match: {
+                ...matchFilter,
+                $text: { $search: search },
+            },
+        });
+
+        pipeline.push({
+            $addFields: { score: { $meta: "textScore" } },
+        });
+    } else {
+        pipeline.push({ $match: matchFilter });
+    }
+
+    pipeline.push(
+        {
+            $lookup: {
+                from: "restaurants",
+                localField: "restaurant",
+                foreignField: "_id",
+                as: "restaurant",
+            },
+        },
+        { $unwind: "$restaurant" },
+        {
+            $project: {
+                title: 1,
+                description: 1,
+                foodType: 1,
+                quantity: 1,
+                unit: 1,
                 expiryTime: 1,
-            };
-            break;
-
-        case "quantity":
-            sortOption = {
-                quantity: -1,
-            };
-            break;
-
-        default:
-            sortOption = {
-                createdAt: -1,
-            };
-    }
-
-    const currentPage = Math.max(
-        parseInt(page, 10) || 1,
-        1
+                pickupStartTime: 1,
+                pickupEndTime: 1,
+                images: 1,
+                pickupAddress: 1,
+                city: 1,
+                latitude: 1,
+                longitude: 1,
+                status: 1,
+                reservedBy: 1,
+                volunteer: 1,
+                completedAt: 1,
+                notes: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                distance: 1,
+                score: 1,
+                restaurant: {
+                    _id: "$restaurant._id",
+                    restaurantName: "$restaurant.restaurantName",
+                    city: "$restaurant.city",
+                    logo: "$restaurant.logo",
+                    address: "$restaurant.address",
+                    isVerified: "$restaurant.isVerified",
+                },
+            },
+        },
+        {
+            $facet: {
+                data: [
+                    { $sort: buildSortStage(sort, hasGeo, !!search) },
+                    { $skip: skip },
+                    { $limit: pageSize },
+                ],
+                totalCount: [{ $count: "count" }],
+            },
+        }
     );
 
-    const pageSize = Math.min(
-        Math.max(parseInt(limit, 10) || 10, 1),
-        100
-    );
+    const [result] = await Donation.aggregate(pipeline);
 
-    const skip = (currentPage - 1) * pageSize;
+    const donations = result.data;
 
-    const [donations, total] = await Promise.all([
-        Donation.find(filter)
-            .populate({
-                path: "restaurant",
-                select:
-                    "restaurantName city logo address isVerified",
-            })
-            .sort(sortOption)
-            .skip(skip)
-            .limit(pageSize),
+    const total = result.totalCount[0]?.count || 0;
 
-        Donation.countDocuments(filter),
-    ]);
-
-    const totalPages = Math.ceil(
-        total / pageSize
-    );
+    const totalPages = Math.ceil(total / pageSize);
 
     return {
         donations,
