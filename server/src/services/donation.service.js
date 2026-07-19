@@ -2,6 +2,8 @@ const Donation = require("../models/Donation");
 const Restaurant = require("../models/Restaurant");
 const User = require("../models/User");
 const notificationService = require("./notification.service");
+const emailService = require("./email.service");
+const donationExpiredTemplate = require("../templates/donationExpired.template");
 const ApiError = require("../utils/ApiError");
 
 const createDonation = async (userId, payload) => {
@@ -265,10 +267,59 @@ const getAllDonations = async (query) => {
     };
 };
 
+const expireDonations = async () => {
+    const expiredDonations = await Donation.find({
+        status: "available",
+        expiryTime: {
+            $lte: new Date(),
+        },
+    });
+
+    if (!expiredDonations.length) {
+        return { count: 0 };
+    }
+
+    for (const donation of expiredDonations) {
+        donation.status = "expired";
+
+        await donation.save();
+
+        const restaurant = await Restaurant.findById(
+            donation.restaurant
+        ).populate("user");
+
+        if (!restaurant?.user) {
+            continue;
+        }
+
+        await notificationService.createNotification({
+            user: restaurant.user._id,
+            title: "Donation Expired",
+            message: "One of your donations expired before it was reserved.",
+            type: "DONATION_EXPIRED",
+            priority: "medium",
+            data: {
+                donation: donation._id,
+                restaurant: restaurant._id,
+            },
+        });
+
+        await emailService.sendTemplateEmail({
+            to: restaurant.user.email,
+            subject: "Donation Expired",
+            template: donationExpiredTemplate,
+            data: {},
+        });
+    }
+
+    return { count: expiredDonations.length };
+};
+
 module.exports = {
     createDonation,
     getMyDonations,
     getDonationById,
+    expireDonations,
     updateDonation,
     deleteDonation,
     getAllDonations

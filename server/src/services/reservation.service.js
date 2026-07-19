@@ -1,8 +1,15 @@
 const Donation = require("../models/Donation");
 const Reservation = require("../models/Reservation");
 const Restaurant = require("../models/Restaurant");
+const User = require("../models/User");
 
 const notificationService = require("./notification.service");
+const emailService = require("./email.service");
+
+const reservationAcceptedTemplate = require("../templates/reservationAccepted.template");
+const foodPickedUpTemplate = require("../templates/foodPickedUp.template");
+const foodDeliveredTemplate = require("../templates/foodDelivered.template");
+const reservationCompletedTemplate = require("../templates/reservationCompleted.template");
 
 const ApiError = require("../utils/ApiError");
 
@@ -321,6 +328,18 @@ const acceptReservation = async (reservationId, restaurantUserId) => {
             },
         });
 
+        const ngo = await User.findById(reservation.ngo);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Reservation Accepted",
+            template: reservationAcceptedTemplate,
+            data: {
+                ngoName: ngo.fullName,
+                restaurantName: restaurant.restaurantName,
+            },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -416,6 +435,18 @@ const pickupReservation = async (reservationId, volunteerId) => {
             },
         });
 
+        const ngo = await User.findById(reservation.ngo);
+        const volunteer = await User.findById(reservation.volunteer);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Food Picked Up",
+            template: foodPickedUpTemplate,
+            data: {
+                volunteerName: volunteer.fullName,
+            },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -505,6 +536,17 @@ const deliverReservation = async (reservationId, volunteerId) => {
             priority: "medium",
             data: {
                 reservation: reservation._id,
+            },
+        });
+
+        const ngo = await User.findById(reservation.ngo);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Food Delivered",
+            template: foodDeliveredTemplate,
+            data: {
+                ngoName: ngo.fullName,
             },
         });
 
@@ -617,6 +659,17 @@ const completeReservation = async (reservationId, userId) => {
             priority: "medium",
             data: {
                 reservation: reservation._id,
+            },
+        });
+
+        const ngo = await User.findById(reservation.ngo);
+
+        await emailService.sendTemplateEmail({
+            to: ngo.email,
+            subject: "Reservation Completed",
+            template: reservationCompletedTemplate,
+            data: {
+                restaurantName: restaurant.restaurantName,
             },
         });
 

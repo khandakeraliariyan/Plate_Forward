@@ -1,6 +1,8 @@
 const Notification = require("../models/notification.model");
-const User = require("../models/user.model");
+const User = require("../models/User");
 const ApiError = require("../utils/ApiError");
+
+const emailService = require("./email.service");
 
 const createNotification = async ({
     user,
@@ -125,7 +127,7 @@ const broadcastNotification = async ({
         };
     }
 
-    const users = await User.find(filter).select("_id");
+    const users = await User.find(filter).select("_id email");
 
     const notifications = users.map((user) => ({
         user: user._id,
@@ -136,6 +138,12 @@ const broadcastNotification = async ({
     }));
 
     await Notification.insertMany(notifications);
+
+    await emailService.sendBulkEmail({
+        recipients: users.map((u) => u.email),
+        subject: title,
+        html: message,
+    });
 
     return {
         sent: notifications.length,
