@@ -2,15 +2,15 @@ require("dotenv").config();
 
 const http = require("http");
 
-const app = require("./src/app");
+const app = require("./app");
 
-const connectDB = require("./src/config/db");
+const connectDB = require("./config/db");
 
-const { verifyEmailConnection } = require("./src/config/email");
+const { verifyEmailConnection } = require("./config/email");
 
-const startJobs = require("./src/jobs");
+const startJobs = require("./jobs");
 
-const { initSocket, shutdownSocket } = require("./src/socket");
+const { initSocket, shutdownSocket } = require("./socket");
 
 const PORT = process.env.PORT || 5000;
 
