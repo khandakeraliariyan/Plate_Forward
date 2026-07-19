@@ -2,6 +2,8 @@ const Donation = require("../models/Donation");
 const Reservation = require("../models/Reservation");
 const Restaurant = require("../models/Restaurant");
 
+const notificationService = require("./notification.service");
+
 const ApiError = require("../utils/ApiError");
 
 const generatePickupCode = require("../utils/generatePickupCode");
@@ -78,6 +80,24 @@ const reserveDonation = async (donationId, ngoId, payload) => {
 
         await session.commitTransaction();
 
+        const populatedRestaurant = await Restaurant.findById(
+            reservation[0].restaurant
+        ).populate("user");
+
+        await notificationService.createNotification({
+            user: populatedRestaurant.user._id,
+            title: "New Reservation",
+            message: "An NGO has reserved one of your food donations.",
+            type: "DONATION_RESERVED",
+            priority: "high",
+            data: {
+                reservation: reservation[0]._id,
+                donation: reservation[0].donation,
+                restaurant: reservation[0].restaurant,
+                ngo: reservation[0].ngo,
+            },
+        });
+
         return reservation[0];
     } catch (error) {
         await session.abortTransaction();
@@ -132,6 +152,32 @@ const cancelReservation = async (reservationId, ngoId, payload) => {
         );
 
         await session.commitTransaction();
+
+        const restaurant = await Restaurant.findById(
+            reservation.restaurant
+        ).populate("user");
+
+        await notificationService.createNotification({
+            user: restaurant.user._id,
+            title: "Reservation Cancelled",
+            message: "The NGO cancelled the reservation.",
+            type: "RESERVATION_CANCELLED",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
+
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Reservation Cancelled",
+            message: "Your reservation has been cancelled successfully.",
+            type: "RESERVATION_CANCELLED",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
 
         return reservation;
     } catch (error) {
@@ -263,6 +309,18 @@ const acceptReservation = async (reservationId, restaurantUserId) => {
 
         await session.commitTransaction();
 
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Reservation Accepted",
+            message: "Your reservation has been accepted by the restaurant.",
+            type: "RESERVATION_ACCEPTED",
+            priority: "high",
+            data: {
+                reservation: reservation._id,
+                donation: reservation.donation,
+            },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -332,6 +390,32 @@ const pickupReservation = async (reservationId, volunteerId) => {
 
         await session.commitTransaction();
 
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Food Picked Up",
+            message: "The volunteer has picked up your reserved food.",
+            type: "FOOD_PICKED_UP",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
+
+        const restaurant = await Restaurant.findById(
+            reservation.restaurant
+        ).populate("user");
+
+        await notificationService.createNotification({
+            user: restaurant.user._id,
+            title: "Food Picked Up",
+            message: "The volunteer has collected the food from your restaurant.",
+            type: "FOOD_PICKED_UP",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
+
         return await Reservation.findById(
             reservation._id
         )
@@ -397,6 +481,32 @@ const deliverReservation = async (reservationId, volunteerId) => {
         );
 
         await session.commitTransaction();
+
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Food Delivered",
+            message: "The volunteer has delivered your reserved food.",
+            type: "FOOD_DELIVERED",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
+
+        const restaurant = await Restaurant.findById(
+            reservation.restaurant
+        ).populate("user");
+
+        await notificationService.createNotification({
+            user: restaurant.user._id,
+            title: "Food Delivered",
+            message: "The food has been successfully delivered to the NGO.",
+            type: "FOOD_DELIVERED",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
 
         return await Reservation.findById(
             reservation._id
@@ -483,6 +593,32 @@ const completeReservation = async (reservationId, userId) => {
         );
 
         await session.commitTransaction();
+
+        await notificationService.createNotification({
+            user: reservation.ngo,
+            title: "Reservation Completed",
+            message: "This food donation has been completed successfully.",
+            type: "RESERVATION_COMPLETED",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
+
+        const restaurant = await Restaurant.findById(
+            reservation.restaurant
+        ).populate("user");
+
+        await notificationService.createNotification({
+            user: restaurant.user._id,
+            title: "Donation Completed",
+            message: "Thank you! Your food donation has been completed.",
+            type: "RESERVATION_COMPLETED",
+            priority: "medium",
+            data: {
+                reservation: reservation._id,
+            },
+        });
 
         return await Reservation.findById(
             reservation._id
