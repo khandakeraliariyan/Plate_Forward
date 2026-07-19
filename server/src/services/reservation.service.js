@@ -170,6 +170,113 @@ const getNGOReservations = async (ngoId) => {
         );
 };
 
+const getReservationById = async (reservationId, user) => {
+    const reservation = await Reservation.findById(reservationId)
+        .populate(
+            "restaurant",
+            "restaurantName ownerName logo phone email address city"
+        )
+        .populate(
+            "ngo",
+            "fullName email avatar phone"
+        )
+        .populate(
+            "volunteer",
+            "fullName email avatar phone"
+        )
+        .populate("donation");
+
+    if (!reservation) {
+        throw new ApiError(404, "Reservation not found.");
+    }
+
+    // Admin can view everything
+    if (user.role === "admin") {
+        return reservation;
+    }
+
+    // NGO that created the reservation
+    if (reservation.ngo && reservation.ngo._id.toString() === user._id.toString()) {
+        return reservation;
+    }
+
+    // Restaurant owner
+    if (user.role === "restaurant") {
+        const restaurant = await Restaurant.findOne({
+            user: user._id,
+        });
+
+        if (restaurant && restaurant._id.toString() === reservation.restaurant._id.toString()) {
+            return reservation;
+        }
+    }
+
+    // Assigned volunteer
+    if (reservation.volunteer && reservation.volunteer._id.toString() === user._id.toString()) {
+        return reservation;
+    }
+
+    throw new ApiError(403, "You are not authorized to view this reservation.");
+};
+
+const acceptReservation = async (reservationId, restaurantUserId) => {
+    const session = await mongoose.startSession();
+
+    try {
+        session.startTransaction();
+
+        const restaurant = await Restaurant.findOne({
+            user: restaurantUserId,
+        }).session(session);
+
+        if (!restaurant) {
+            throw new ApiError(404, "Restaurant profile not found.");
+        }
+
+        const reservation = await Reservation.findById(
+            reservationId
+        ).session(session);
+
+        if (!reservation) {
+            throw new ApiError(404, "Reservation not found.");
+        }
+
+        if (reservation.restaurant.toString() !== restaurant._id.toString()) {
+            throw new ApiError(403, "Unauthorized.");
+        }
+
+        if (reservation.status !== "reserved") {
+            throw new ApiError(400, "Only reserved donations can be accepted.");
+        }
+
+        reservation.status = "accepted";
+
+        reservation.acceptedAt = new Date();
+
+        await reservation.save({ session, });
+
+        await session.commitTransaction();
+
+        return await Reservation.findById(
+            reservation._id
+        )
+            .populate(
+                "ngo",
+                "fullName email avatar"
+            )
+            .populate(
+                "restaurant",
+                "restaurantName"
+            )
+            .populate("donation");
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
 module.exports = {
     reserveDonation,
 
@@ -178,4 +285,8 @@ module.exports = {
     getRestaurantReservations,
 
     getNGOReservations,
+
+    getReservationById,
+
+    acceptReservation,
 };
