@@ -1,5 +1,7 @@
 const Donation = require("../models/Donation");
 const Restaurant = require("../models/Restaurant");
+const User = require("../models/User");
+const notificationService = require("./notification.service");
 const ApiError = require("../utils/ApiError");
 
 const createDonation = async (userId, payload) => {
@@ -15,6 +17,24 @@ const createDonation = async (userId, payload) => {
         restaurant: restaurant._id,
         ...payload,
     });
+
+    const admins = await User.find({
+        role: "admin",
+    }).select("_id");
+
+    for (const admin of admins) {
+        await notificationService.createNotification({
+            user: admin._id,
+            title: "New Donation",
+            message: "A restaurant has published a new food donation.",
+            type: "DONATION_CREATED",
+            priority: "low",
+            data: {
+                donation: donation._id,
+                restaurant: donation.restaurant,
+            },
+        });
+    }
 
     return donation;
 };
