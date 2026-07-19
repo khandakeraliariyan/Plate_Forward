@@ -11,6 +11,8 @@ const donationController = require("../controllers/donation.controller");
 // Public
 router.get("/", donationController.getAllDonations);
 
+router.get("/:id/quality", donationController.getDonationQuality);
+
 // Protected
 router.use(protect);
 router.use(authorize("restaurant"));

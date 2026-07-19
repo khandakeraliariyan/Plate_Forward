@@ -90,10 +90,28 @@ const updateNgoPreferences = async (userId, preferences) => {
     return user;
 };
 
+const updateVolunteerProfile = async (userId, profile) => {
+    const user = await getProfile(userId);
+
+    if (user.role !== "volunteer") {
+        throw new ApiError(403, "Only volunteer accounts have a delivery profile.");
+    }
+
+    user.volunteerProfile = {
+        ...user.volunteerProfile?.toObject(),
+        ...profile,
+    };
+
+    await user.save();
+
+    return user;
+};
+
 module.exports = {
     getProfile,
     uploadAvatar,
     uploadDocument,
     deleteDocument,
     updateNgoPreferences,
+    updateVolunteerProfile,
 };

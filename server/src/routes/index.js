@@ -18,4 +18,6 @@ router.use("/notifications", require("./notification.routes"));
 
 router.use("/analytics", require("./analytics.routes"));
 
+router.use("/fraud", require("./fraud.routes"));
+
 module.exports = router;

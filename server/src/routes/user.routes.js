@@ -24,6 +24,12 @@ router.get(
     controller.getRecommendations
 );
 
+router.patch(
+    "/me/volunteer-profile",
+    authorize("volunteer"),
+    controller.updateVolunteerProfile
+);
+
 router.patch("/me/avatar", uploadImageSingle("avatar"), controller.uploadAvatar);
 
 router.post(

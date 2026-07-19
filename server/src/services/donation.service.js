@@ -8,6 +8,7 @@ const emailService = require("./email.service");
 const donationExpiredTemplate = require("../templates/donationExpired.template");
 const ApiError = require("../utils/ApiError");
 const storageService = require("./storage.service");
+const fraudDetectionService = require("./fraudDetection.service");
 
 const MAX_DONATION_IMAGES = 5;
 
@@ -41,10 +42,16 @@ const createDonation = async (userId, payload, files = []) => {
         ? await storageService.uploadFiles(files, "DONATION_IMAGE")
         : [];
 
+    const fraudFlags = await fraudDetectionService.evaluateNewDonation(
+        restaurant._id,
+        payload
+    );
+
     const donation = await Donation.create({
         restaurant: restaurant._id,
         ...payload,
         images: uploadedImages.map(({ url, publicId }) => ({ url, publicId })),
+        fraudFlags,
     });
 
     const admins = await User.find({

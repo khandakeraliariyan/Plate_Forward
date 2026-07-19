@@ -40,7 +40,24 @@ const recommendationsQuerySchema = z.object({
     page: z.coerce.number().min(1).optional(),
 });
 
+const volunteerProfileSchema = z.object({
+    address: z.string().optional(),
+
+    latitude: z.coerce.number().min(-90).max(90).optional(),
+
+    longitude: z.coerce.number().min(-180).max(180).optional(),
+
+    maxDistanceKm: z.coerce.number().min(1).optional(),
+}).refine(
+    (data) => (data.latitude === undefined) === (data.longitude === undefined),
+    {
+        message: "latitude and longitude must be provided together.",
+        path: ["latitude"],
+    }
+);
+
 module.exports = {
     ngoPreferencesSchema,
     recommendationsQuerySchema,
+    volunteerProfileSchema,
 };

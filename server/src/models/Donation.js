@@ -149,6 +149,34 @@ const donationSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+
+        // Heuristic fraud-detection flags (Module 16), non-blocking - set
+        // at creation time and surfaced to admins for review.
+        fraudFlags: [
+            {
+                type: {
+                    type: String,
+                    enum: ["duplicate", "spam"],
+                    required: true,
+                },
+
+                reason: {
+                    type: String,
+                    required: true,
+                },
+
+                relatedDonation: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "Donation",
+                    default: null,
+                },
+
+                detectedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            },
+        ],
     },
     {
         timestamps: true,

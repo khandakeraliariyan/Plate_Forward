@@ -28,6 +28,12 @@ router.patch("/:reservationId/deliver", authorize("volunteer"), reservationContr
 
 router.post("/:reservationId/rating", authorize("ngo"), reservationController.rateReservation);
 
+router.get(
+    "/:reservationId/suggested-volunteers",
+    authorize("restaurant", "admin"),
+    reservationController.getSuggestedVolunteers
+);
+
 router.get("/:reservationId", reservationController.getReservationById);
 
 module.exports = router;

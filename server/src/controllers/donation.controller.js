@@ -1,6 +1,7 @@
 const catchAsync = require("../utils/catchAsync");
 
 const donationService = require("../services/donation.service");
+const foodQualityService = require("../services/foodQuality.service");
 const ApiError = require("../utils/ApiError");
 
 const { createDonationSchema, donationQuerySchema } = require("../validations/donation.validation");
@@ -99,6 +100,15 @@ exports.removeDonationImage = catchAsync(async (req, res) => {
         success: true,
         message: "Image removed successfully.",
         data: donation,
+    });
+});
+
+exports.getDonationQuality = catchAsync(async (req, res) => {
+    const assessment = await foodQualityService.assessDonationById(req.params.id);
+
+    res.status(200).json({
+        success: true,
+        data: assessment,
     });
 });
 

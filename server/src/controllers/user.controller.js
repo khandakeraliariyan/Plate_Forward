@@ -3,7 +3,7 @@ const ApiError = require("../utils/ApiError");
 
 const userService = require("../services/user.service");
 
-const { ngoPreferencesSchema, recommendationsQuerySchema } = require("../validations/user.validation");
+const { ngoPreferencesSchema, recommendationsQuerySchema, volunteerProfileSchema } = require("../validations/user.validation");
 const recommendationService = require("../services/recommendation.service");
 
 exports.getProfile = catchAsync(async (req, res) => {
@@ -68,6 +68,18 @@ exports.updateNgoPreferences = catchAsync(async (req, res) => {
     res.json({
         success: true,
         message: "Preferences updated successfully.",
+        data: user,
+    });
+});
+
+exports.updateVolunteerProfile = catchAsync(async (req, res) => {
+    const payload = volunteerProfileSchema.parse(req.body);
+
+    const user = await userService.updateVolunteerProfile(req.user._id, payload);
+
+    res.json({
+        success: true,
+        message: "Profile updated successfully.",
         data: user,
     });
 });

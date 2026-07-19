@@ -146,6 +146,24 @@ const userSchema = new mongoose.Schema(
                 min: 0,
             },
         },
+
+        // Only meaningful for role: "volunteer" - used by the volunteer
+        // smart-matching service (Module 16) to score distance to a pickup.
+        volunteerProfile: {
+            address: {
+                type: String,
+                default: "",
+            },
+
+            latitude: Number,
+
+            longitude: Number,
+
+            maxDistanceKm: {
+                type: Number,
+                min: 1,
+            },
+        },
     },
     {
         timestamps: true,

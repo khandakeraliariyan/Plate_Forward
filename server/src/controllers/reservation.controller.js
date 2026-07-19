@@ -3,6 +3,7 @@ const catchAsync = require("../utils/catchAsync");
 const { reserveDonationSchema, cancelReservationSchema, rateReservationSchema, } = require("../validations/reservation.validation");
 
 const reservationService = require("../services/reservation.service");
+const volunteerMatchingService = require("../services/volunteerMatching.service");
 
 exports.reserveDonation = catchAsync(async (req, res) => {
     const payload = reserveDonationSchema.parse(req.body);
@@ -130,6 +131,17 @@ exports.completeReservation = catchAsync(async (req, res) => {
         message:
             "Reservation completed.",
         data: reservation,
+    });
+});
+
+exports.getSuggestedVolunteers = catchAsync(async (req, res) => {
+    const suggestions = await volunteerMatchingService.getSuggestedVolunteers(
+        req.params.reservationId
+    );
+
+    res.status(200).json({
+        success: true,
+        data: suggestions,
     });
 });
 
