@@ -10,4 +10,8 @@ router.use("/restaurants", require("./restaurant.routes"));
 
 router.use("/donations", require("./donation.routes"));
 
+router.use("/reservations", require("./reservation.routes"));
+
+router.use("/notifications", require("./notification.routes"));
+
 module.exports = router;
