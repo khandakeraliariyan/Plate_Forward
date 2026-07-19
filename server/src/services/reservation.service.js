@@ -837,6 +837,43 @@ const completeReservation = async (reservationId, userId) => {
     }
 };
 
+const rateReservation = async (reservationId, ngoId, { score, comment }) => {
+    const reservation = await Reservation.findById(reservationId);
+
+    if (!reservation) {
+        throw new ApiError(404, "Reservation not found.");
+    }
+
+    if (reservation.ngo.toString() !== ngoId.toString()) {
+        throw new ApiError(403, "Unauthorized.");
+    }
+
+    if (!["delivered", "completed"].includes(reservation.status)) {
+        throw new ApiError(
+            400,
+            "Only delivered or completed reservations can be rated."
+        );
+    }
+
+    if (!reservation.volunteer) {
+        throw new ApiError(400, "This reservation has no assigned volunteer.");
+    }
+
+    if (reservation.rating?.score) {
+        throw new ApiError(400, "This reservation has already been rated.");
+    }
+
+    reservation.rating = {
+        score,
+        comment: comment || "",
+        ratedAt: new Date(),
+    };
+
+    await reservation.save();
+
+    return reservation;
+};
+
 module.exports = {
     reserveDonation,
 
@@ -854,5 +891,7 @@ module.exports = {
 
     deliverReservation,
 
-    completeReservation
+    completeReservation,
+
+    rateReservation
 };

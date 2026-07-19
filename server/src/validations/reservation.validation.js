@@ -11,7 +11,14 @@ const cancelReservationSchema = z.object({
         .max(300),
 });
 
+const rateReservationSchema = z.object({
+    score: z.coerce.number().int().min(1).max(5),
+
+    comment: z.string().max(300).optional(),
+});
+
 module.exports = {
     reserveDonationSchema,
     cancelReservationSchema,
+    rateReservationSchema,
 };

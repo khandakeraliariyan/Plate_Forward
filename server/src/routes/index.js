@@ -16,4 +16,6 @@ router.use("/reservations", require("./reservation.routes"));
 
 router.use("/notifications", require("./notification.routes"));
 
+router.use("/analytics", require("./analytics.routes"));
+
 module.exports = router;

@@ -4,6 +4,7 @@ const Donation = require("../models/Donation");
 const Reservation = require("../models/Reservation");
 const User = require("../models/User");
 const ApiError = require("../utils/ApiError");
+const { haversineKm } = require("../utils/geo");
 
 // Weight of each scoring factor when all of them are computable for a given
 // donation. Factors that can't be computed (e.g. no NGO location, no
@@ -31,21 +32,6 @@ const URGENCY_WINDOW_HOURS = 48;
 
 // Deliveries slower than this get the minimum delivery-speed score.
 const DELIVERY_SPEED_FLOOR_HOURS = 6;
-
-const toRad = (deg) => (deg * Math.PI) / 180;
-
-const haversineKm = (lat1, lon1, lat2, lon2) => {
-    const R = 6371;
-
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-
-    return R * 2 * Math.asin(Math.sqrt(a));
-};
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
