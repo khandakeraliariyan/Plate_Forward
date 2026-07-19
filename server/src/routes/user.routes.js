@@ -40,4 +40,8 @@ router.post(
 
 router.delete("/me/documents/:documentId", controller.deleteDocument);
 
+router.get("/me/sessions", controller.getSessions);
+
+router.delete("/me/sessions/:sessionId", controller.revokeSession);
+
 module.exports = router;

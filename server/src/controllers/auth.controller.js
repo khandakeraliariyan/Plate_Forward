@@ -1,6 +1,9 @@
 const {
     register,
     login,
+    refreshAccessToken,
+    logout,
+    logoutAll,
     verifyEmail,
     forgotPassword,
     resetPassword,
@@ -14,31 +17,105 @@ const {
 } = require("../validations/auth.validation");
 
 const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/ApiError");
+
+const REFRESH_COOKIE_NAME = "refreshToken";
+const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (upper bound - actual expiry is enforced server-side per Session)
+
+const requestContext = (req) => ({
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+});
+
+const setRefreshCookie = (res, refreshToken) => {
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+    });
+};
+
+const clearRefreshCookie = (res) => {
+    res.clearCookie(REFRESH_COOKIE_NAME, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+    });
+};
 
 exports.register = catchAsync(async (req, res) => {
     const payload = registerSchema.parse(req.body);
 
-    const data = await register(payload);
+    const { user, accessToken, refreshToken } = await register(
+        payload,
+        requestContext(req)
+    );
+
+    setRefreshCookie(res, refreshToken);
 
     res.status(201).json({
         success: true,
         message: "Registration successful",
-        data,
+        data: { user, accessToken },
     });
 });
 
 exports.login = catchAsync(async (req, res) => {
     const payload = loginSchema.parse(req.body);
 
-    const data = await login(
+    const { user, accessToken, refreshToken } = await login(
         payload.email,
-        payload.password
+        payload.password,
+        { ...requestContext(req), rememberMe: payload.rememberMe }
     );
+
+    setRefreshCookie(res, refreshToken);
 
     res.json({
         success: true,
         message: "Login successful",
-        data,
+        data: { user, accessToken },
+    });
+});
+
+exports.refresh = catchAsync(async (req, res) => {
+    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+
+    const { accessToken, refreshToken } = await refreshAccessToken(
+        rawRefreshToken,
+        requestContext(req)
+    );
+
+    setRefreshCookie(res, refreshToken);
+
+    res.json({
+        success: true,
+        data: { accessToken },
+    });
+});
+
+exports.logout = catchAsync(async (req, res) => {
+    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+
+    await logout(rawRefreshToken);
+
+    clearRefreshCookie(res);
+
+    res.json({
+        success: true,
+        message: "Logged out successfully.",
+    });
+});
+
+exports.logoutAll = catchAsync(async (req, res) => {
+    await logoutAll(req.user._id);
+
+    clearRefreshCookie(res);
+
+    res.json({
+        success: true,
+        message: "Logged out of all devices.",
     });
 });
 
@@ -61,7 +138,7 @@ exports.verifyEmail = catchAsync(async (req, res) => {
 exports.forgotPassword = catchAsync(async (req, res) => {
     const payload = forgotPasswordSchema.parse(req.body);
 
-    await forgotPassword(payload.email);
+    await forgotPassword(payload.email, requestContext(req));
 
     res.json({
         success: true,
@@ -72,7 +149,7 @@ exports.forgotPassword = catchAsync(async (req, res) => {
 exports.resetPassword = catchAsync(async (req, res) => {
     const payload = resetPasswordSchema.parse(req.body);
 
-    await resetPassword(req.params.token, payload.password);
+    await resetPassword(req.params.token, payload.password, requestContext(req));
 
     res.json({
         success: true,

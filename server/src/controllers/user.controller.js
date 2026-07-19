@@ -2,6 +2,7 @@ const catchAsync = require("../utils/catchAsync");
 const ApiError = require("../utils/ApiError");
 
 const userService = require("../services/user.service");
+const sessionService = require("../services/session.service");
 
 const { ngoPreferencesSchema, recommendationsQuerySchema, volunteerProfileSchema } = require("../validations/user.validation");
 const recommendationService = require("../services/recommendation.service");
@@ -81,6 +82,24 @@ exports.updateVolunteerProfile = catchAsync(async (req, res) => {
         success: true,
         message: "Profile updated successfully.",
         data: user,
+    });
+});
+
+exports.getSessions = catchAsync(async (req, res) => {
+    const sessions = await sessionService.getActiveSessions(req.user._id);
+
+    res.json({
+        success: true,
+        data: sessions,
+    });
+});
+
+exports.revokeSession = catchAsync(async (req, res) => {
+    await sessionService.revokeSessionById(req.user._id, req.params.sessionId);
+
+    res.json({
+        success: true,
+        message: "Session revoked successfully.",
     });
 });
 

@@ -12,6 +12,8 @@ const routes = require("./routes");
 
 const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");
+const ipBlockGuard = require("./middlewares/ipBlockGuard");
+const sanitizeRequest = require("./middlewares/sanitize");
 
 const app = express();
 
@@ -31,6 +33,8 @@ app.use(
     })
 );
 
+app.use(ipBlockGuard);
+
 app.use(cors(corsOptions));
 
 app.use(compression());
@@ -46,9 +50,11 @@ app.use(
 
 app.use(cookieParser());
 
-if (process.env.NODE_ENV !== "production") {
-    app.use(morgan("dev"));
-}
+app.use(sanitizeRequest);
+
+// Request (access) logging - always on, not just in dev, so production
+// traffic is auditable too; "combined" is the standard Apache-style format.
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 app.get("/", (req, res) => {
     res.status(200).json({

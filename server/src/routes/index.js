@@ -22,4 +22,6 @@ router.use("/fraud", require("./fraud.routes"));
 
 router.use("/maps", require("./maps.routes"));
 
+router.use("/security", require("./security.routes"));
+
 module.exports = router;
