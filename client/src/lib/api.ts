@@ -32,9 +32,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-let refreshPromise: Promise<string | null> | null = null;
-
-const refreshAccessToken = async (): Promise<string | null> => {
+const doRefresh = async (): Promise<string | null> => {
   const csrfToken = readCookie("csrfToken");
   try {
     const res = await axios.post(
@@ -54,6 +52,22 @@ const refreshAccessToken = async (): Promise<string | null> => {
   }
 };
 
+// The refresh token rotates on every use, so two concurrent callers (e.g.
+// React 18 StrictMode double-invoking an effect) would otherwise race: the
+// second call reads the already-rotated-out cookie and 401s, clobbering the
+// token the first call just set. Coalescing into one shared in-flight
+// promise makes every caller within a window observe the same result.
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshAccessToken = (): Promise<string | null> => {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
@@ -62,13 +76,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && original && !original._retried && !original.url?.includes("/auth/")) {
       original._retried = true;
 
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken().finally(() => {
-          refreshPromise = null;
-        });
-      }
-
-      const token = await refreshPromise;
+      const token = await refreshAccessToken();
       if (token) {
         original.headers = original.headers ?? {};
         original.headers.Authorization = `Bearer ${token}`;
