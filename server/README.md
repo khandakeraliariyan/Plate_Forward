@@ -13,6 +13,12 @@ Backend API for **Plate Forward**, a food-rescue platform connecting restaurants
 - [Real-time Events (Socket.IO)](#real-time-events-socketio)
 - [Background Jobs](#background-jobs)
 - [Security Measures](#security-measures)
+- [Data Models](#data-models)
+- [Heuristic Estimation Engines](#heuristic-estimation-engines)
+- [Pickup Verification](#pickup-verification)
+- [Response & Error Conventions](#response--error-conventions)
+- [Services Layer](#services-layer)
+- [Known Gaps / Not Yet Wired Up](#known-gaps--not-yet-wired-up)
 - [Testing Guide](#testing-guide)
 
 ## Tech Stack
@@ -129,6 +135,51 @@ Run via `node-cron` (started in `server.js`, defined under `src/jobs/`):
 - Audit logging of security-relevant actions (failed logins, IP blocks/unblocks, session revocations) queryable via `/security/audit-logs`.
 - File upload validation: mimetype allow-lists and size caps (5MB images, 10MB documents).
 - Centralized error handling — Zod validation errors normalize to `400`, stack traces never leak in responses.
+
+## Data Models
+
+Seven Mongoose collections, `server/src/models/`. Field-level detail (enums, ranges) is in [API_DOCS.md](API_DOCS.md) where it maps to request bodies — this section covers relationships and fields that aren't user-submitted.
+
+- **User** — root identity for all four roles (`restaurant`, `ngo`, `volunteer`, `admin`). Holds shared fields (name, email, password hash, avatar, `documents[]` with Cloudinary `type: image|raw`) plus two role-specific embedded sub-objects that only apply conditionally: `ngoPreferences` (address/geo, `preferredFoodTypes[]`, `maxDistanceKm`, `minQuantity` — drives `/users/me/recommendations`) and `volunteerProfile` (address/geo, `maxDistanceKm` — drives volunteer job matching). The `admin` role has no public registration path; it must be set directly in the database.
+- **Restaurant** — 1:1 extension of a `restaurant`-role User (separate document, not embedded, referenced by `user`). Carries the public-facing storefront data (branding images, hours, `foodCategories[]`) and moderation state (`isVerified`, `verificationStatus`) independently of the User's own `isVerified` (email verification) flag — the two are distinct trust signals.
+- **Donation** — owned by a Restaurant. `location` is a GeoJSON point with a `2dsphere` index (powers `/maps/nearby-donations` and geo search on `/donations`). `status` is a one-way lifecycle (`available → reserved → picked_up → delivered → completed`, or `cancelled`/`expired` as terminal exits) advanced by reservation actions and the expiry cron jobs, not directly patchable by clients. `fraudFlags[]` is populated by `fraudDetection.service.js`, not by users.
+- **Reservation** — the join entity between a Donation, the reserving NGO, and (once accepted) an assigned volunteer. Generates its own `pickupCode` + `qrCode` on creation (see [Pickup Verification](#pickup-verification)). Embeds the post-completion `rating` (score 1-5 + comment) rather than a separate collection, since a reservation can only be rated once.
+- **notification.model.js** — in-app notifications; supports both a single `user` target and role-wide broadcasts (`POST /notifications/broadcast`) via a `roles[]`/priority scheme rather than fanning out to per-user documents at write time.
+- **Session** — one document per active refresh-token, storing only the SHA-256 hash (never the raw token) plus device/IP metadata, so `/users/me/sessions` can show "active devices" and support per-session revocation without ever persisting a usable secret.
+- **AuditLog** — append-only security event log (failed logins, IP blocks/unblocks, admin actions), queried via `/security/audit-logs`. Written by `auditLog.service.js`, never by controllers directly.
+- **BlockedIp** — IP blocklist entries, either auto-created by `ipSecurity.service.js` (5 failed logins / 15 min → 30 min TTL block) or manually created/removed by an admin via `/security/blocked-ips`.
+
+## Heuristic Estimation Engines
+
+Three subsystems intentionally trade real-world accuracy for zero external dependencies — no Google Maps/Directions API, no image-based food inspection, no ML model. Each lives in a small config file under `src/config/` so the constants can be tuned without touching service logic:
+
+- **Food freshness/risk** (`shelfLifeConstants.js`, used by `foodQuality.service.js`, exposed via `GET /donations/:id/quality`) — assigns a shelf-life in hours per `foodType` (e.g. Cooked Meal: 6h, Frozen: 720h) counted from posting time, and derives a freshness score purely from elapsed time vs. that budget. No image analysis.
+- **Travel time / ETA** (`mapsConstants.js`, used by `maps.service.js` for `/maps/eta`, `/maps/distance-matrix`, `/maps/optimize-route`) — converts haversine straight-line distance (`utils/geo.js`) to an estimate via a fixed 25 km/h average speed and a 1.3x "detour index" to roughly approximate real road distance. `optimize-route` uses a greedy nearest-neighbor heuristic, not a true TSP solver.
+- **Impact metrics** (`impactConstants.js`, used by the `services/analytics/*` modules for restaurant/NGO/admin dashboards) — converts mixed donation units (Plate, Box, Kg, Tray, ...) into kilogram-equivalents via a lookup table, then derives "meals served" (kg ÷ 0.5) and "CO2-eq avoided" (kg × 2.5) for impact stats. These are commonly-cited food-waste rules of thumb, not measured values.
+
+All three are marked in-code as admin-tunable defaults rather than authoritative figures — worth knowing before quoting numbers derived from them externally.
+
+## Pickup Verification
+
+When an NGO's reservation is accepted, `reservation.service.js` generates a one-time 8-character hex `pickupCode` (`utils/generatePickupCode.js`) and a matching QR code (`utils/generateQRCode.js`, a base64 data URL encoding that same code) that expire 30 minutes after creation. These are meant to be shown to the volunteer/restaurant at handoff to confirm the correct pickup, though the actual verification/scan endpoint is not yet present in the route layer — currently the code and QR are generated and stored on the `Reservation` document (and referenced in the cancellation email as `reservationCode`) but not otherwise checked by any controller.
+
+## Response & Error Conventions
+
+- Every successful response is a JSON object shaped `{ success: true, message?, data?/<resource key> }`; controllers call `res.status(...).json({ success: true, ... })` directly rather than through a shared response wrapper class.
+- Errors are raised as `ApiError(statusCode, message)` (`utils/ApiError.js`) and normalized by the centralized error-handling middleware — thrown Zod validation errors are automatically converted to `400` with field-level messages; unexpected errors return a generic `500` without leaking stack traces.
+- `utils/catchAsync.js` wraps async controllers so rejected promises are forwarded to the error handler instead of needing try/catch in every controller.
+- List endpoints that accept `page`/`limit` return standard pagination metadata alongside the array (see individual endpoints in [API_DOCS.md](API_DOCS.md) for exact query params).
+
+## Services Layer
+
+Business logic is kept out of controllers under `src/services/`, one file per resource, plus a dedicated `services/analytics/` folder with one aggregation module per role (`restaurant.analytics.service.js`, `ngo.analytics.service.js`, `volunteer.analytics.service.js`, `admin.analytics.service.js`, sharing common aggregation helpers via `analytics/shared.js`). Notable non-obvious ones: `recommendation.service.js` (NGO donation matching against `ngoPreferences`), `volunteerMatching.service.js` (suggested-volunteers heuristic behind `/reservations/:id/suggested-volunteers`), `fraudDetection.service.js` (behind `/fraud/report`), and `ipSecurity.service.js`/`auditLog.service.js` (behind the admin security endpoints).
+
+## Known Gaps / Not Yet Wired Up
+
+- `firebase-admin` is an installed dependency but has no importing code anywhere in `src/` yet — push notifications are not implemented, only in-app (`notification.model.js`) and email (`nodemailer`) delivery currently work.
+- The pickup-code/QR flow (see [Pickup Verification](#pickup-verification)) is generated and stored but has no verification endpoint yet — nothing in the route layer checks a scanned/submitted code against `Reservation.pickupCode`.
+- No automated test suite exists yet (see [Testing Guide](#testing-guide)).
+- `ENCRYPTION_KEY`/`utils/encryption.js` (AES-256-GCM) is a ready-to-use helper for a future reversible-encryption field; no current schema field uses it — passwords are bcrypt-hashed and all tokens (refresh/reset/verification) are SHA-256-hashed, both one-way.
 
 ## Testing Guide
 

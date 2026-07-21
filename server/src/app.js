@@ -57,6 +57,16 @@ app.use(
     })
 );
 
+// express.json()/urlencoded() only populate req.body when a matching
+// Content-Type is sent; a bodyless request (common for action endpoints like
+// POST /reservations/:id) otherwise leaves it undefined, which fails any
+// Zod `z.object({...optionalFields})` schema even though every field is
+// optional. Normalizing to {} makes "no body" and "empty body" equivalent.
+app.use((req, res, next) => {
+    if (req.body === undefined) req.body = {};
+    next();
+});
+
 app.use(cookieParser());
 
 app.use(sanitizeRequest);

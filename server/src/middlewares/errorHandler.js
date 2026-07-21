@@ -8,7 +8,7 @@ const errorHandler = (err, req, res, next) => {
     if (err instanceof ZodError) {
         statusCode = 400;
 
-        message = err.errors.map((e) => e.message).join(", ");
+        message = err.issues.map((e) => e.message).join(", ");
     }
 
     res.status(statusCode).json({

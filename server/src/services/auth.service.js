@@ -9,6 +9,7 @@ const emailService = require("./email.service");
 const sessionService = require("./session.service");
 const auditLogService = require("./auditLog.service");
 const ipSecurityService = require("./ipSecurity.service");
+const logger = require("../utils/logger");
 
 const welcomeTemplate = require("../templates/welcome.template");
 const passwordResetTemplate = require("../templates/passwordReset.template");
@@ -45,24 +46,30 @@ const register = async (payload, context = {}) => {
         rememberMe: false,
     });
 
-    await emailService.sendTemplateEmail({
-        to: user.email,
-        subject: "Welcome to PlateForward",
-        template: welcomeTemplate,
-        data: {
-            name: user.fullName,
-        },
-    });
+    // Email delivery is best-effort - a misconfigured/unreachable SMTP
+    // server shouldn't fail account creation for an otherwise-valid signup.
+    try {
+        await emailService.sendTemplateEmail({
+            to: user.email,
+            subject: "Welcome to PlateForward",
+            template: welcomeTemplate,
+            data: {
+                name: user.fullName,
+            },
+        });
 
-    await emailService.sendTemplateEmail({
-        to: user.email,
-        subject: "Verify Your Email",
-        template: emailVerificationTemplate,
-        data: {
-            name: user.fullName,
-            verificationUrl: `${process.env.CLIENT_URL}/verify-email/${rawToken}`,
-        },
-    });
+        await emailService.sendTemplateEmail({
+            to: user.email,
+            subject: "Verify Your Email",
+            template: emailVerificationTemplate,
+            data: {
+                name: user.fullName,
+                verificationUrl: `${process.env.CLIENT_URL}/verify-email/${rawToken}`,
+            },
+        });
+    } catch (err) {
+        logger(`Failed to send registration emails to ${user.email}: ${err.message}`);
+    }
 
     await auditLogService.record({
         user: user._id,

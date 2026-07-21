@@ -111,16 +111,23 @@ const donationSchema = new mongoose.Schema(
         // Derived from latitude/longitude for geospatial ($geoNear/$near)
         // queries, which require a GeoJSON field with a 2dsphere index.
         location: {
-            type: {
-                type: String,
-                enum: ["Point"],
-                default: "Point",
-            },
+            type: new mongoose.Schema(
+                {
+                    type: {
+                        type: String,
+                        enum: ["Point"],
+                        default: "Point",
+                    },
 
-            coordinates: {
-                type: [Number],
-                default: undefined,
-            },
+                    coordinates: {
+                        type: [Number],
+                        default: undefined,
+                    },
+                },
+                { _id: false }
+            ),
+
+            default: undefined,
         },
 
         status: {
@@ -204,7 +211,7 @@ donationSchema.index({
     description: "text",
 });
 
-donationSchema.pre("save", function (next) {
+donationSchema.pre("save", function () {
     if (this.isModified("latitude") || this.isModified("longitude")) {
         if (typeof this.latitude === "number" && typeof this.longitude === "number") {
             this.location = {
@@ -215,8 +222,6 @@ donationSchema.pre("save", function (next) {
             this.location = undefined;
         }
     }
-
-    next();
 });
 
 module.exports = mongoose.model(
