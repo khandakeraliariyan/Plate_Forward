@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
@@ -143,18 +144,26 @@ export default function Marketplace() {
               network ensures nutritious meals move from donors to tables in record time.
             </p>
             <div className="mt-5 flex gap-3">
-              <a
-                href="#marketplace"
+              <Link
+                to="/browse"
                 className="rounded-xl bg-brand-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-800"
               >
                 Join the Rescue →
-              </a>
-              <a
-                href="#mission"
+              </Link>
+              <Link
+                to="/mission"
                 className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
               >
                 Our Mission
-              </a>
+              </Link>
+              {user?.role === "restaurant" && (
+                <Link
+                  to="/donate/new"
+                  className="rounded-xl border border-brand-200 px-5 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-50"
+                >
+                  Donate Surplus Food
+                </Link>
+              )}
             </div>
           </div>
           <div className="flex h-40 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 md:h-52">
@@ -204,6 +213,9 @@ export default function Marketplace() {
                 Rescue these donations before they expire.
               </p>
             </div>
+            <Link to="/browse" className="text-sm font-bold text-brand-700 hover:text-brand-800">
+              View All Live Items →
+            </Link>
           </div>
 
           {claimError && (
@@ -226,14 +238,24 @@ export default function Marketplace() {
 
             {donations.map((d) => (
               <div key={d._id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                <div className="relative flex h-36 items-center justify-center bg-gradient-to-br from-brand-100 to-brand-300">
+                <Link
+                  to={`/donations/${d._id}`}
+                  state={{ donation: d }}
+                  className="relative flex h-36 items-center justify-center bg-gradient-to-br from-brand-100 to-brand-300"
+                >
                   <span className="text-3xl">🍽️</span>
                   <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-brand-700">
                     {timeUntil(d.expiryTime)}
                   </span>
-                </div>
+                </Link>
                 <div className="p-4">
-                  <div className="font-bold text-slate-900">{d.title}</div>
+                  <Link
+                    to={`/donations/${d._id}`}
+                    state={{ donation: d }}
+                    className="font-bold text-slate-900 hover:text-brand-700"
+                  >
+                    {d.title}
+                  </Link>
                   <div className="text-xs text-slate-500">{d.restaurant?.restaurantName}</div>
                   <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
                     <span>

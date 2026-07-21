@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
@@ -6,7 +6,11 @@ import { api } from "../lib/api";
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [unread, setUnread] = useState(0);
+
+  const linkClass = (path: string) =>
+    location.pathname === path ? "text-slate-900" : "text-slate-500 hover:text-slate-900";
 
   useEffect(() => {
     if (!user) return;
@@ -28,10 +32,26 @@ export default function Navbar() {
           PlateForward
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm font-semibold text-slate-500 md:flex">
-          <span className="text-slate-900">Marketplace</span>
-          <span className="cursor-not-allowed opacity-50">Logistics</span>
-          <span className="cursor-not-allowed opacity-50">Impact</span>
+        <nav className="hidden items-center gap-6 text-sm font-semibold md:flex">
+          <Link to="/marketplace" className={linkClass("/marketplace")}>
+            Marketplace
+          </Link>
+          <Link to="/browse" className={linkClass("/browse")}>
+            Browse
+          </Link>
+          {user?.role === "restaurant" && (
+            <Link to="/donate/new" className={linkClass("/donate/new")}>
+              Donate
+            </Link>
+          )}
+          {user?.role === "admin" && (
+            <Link to="/admin/donations" className={linkClass("/admin/donations")}>
+              Admin
+            </Link>
+          )}
+          <Link to="/mission" className={linkClass("/mission")}>
+            Mission
+          </Link>
         </nav>
 
         <div className="flex items-center gap-4">
