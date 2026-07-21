@@ -15,7 +15,10 @@ export default function RestaurantProfile() {
     email: "",
     address: "",
     city: "",
+    latitude: "",
+    longitude: "",
   });
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     api
@@ -34,7 +37,11 @@ export default function RestaurantProfile() {
     setError(null);
     setSubmitting(true);
     try {
-      await api.post("/restaurants", form);
+      await api.post("/restaurants", {
+        ...form,
+        latitude: form.latitude ? Number(form.latitude) : undefined,
+        longitude: form.longitude ? Number(form.longitude) : undefined,
+      });
       navigate("/donate/new");
     } catch (err: any) {
       setError(err?.response?.data?.message ?? "Unable to save your restaurant profile.");
@@ -139,6 +146,56 @@ export default function RestaurantProfile() {
               onChange={set("city")}
               className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wide text-slate-400">
+                Coordinates (optional)
+              </label>
+              <button
+                type="button"
+                disabled={locating}
+                onClick={() => {
+                  setLocating(true);
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setForm((f) => ({
+                        ...f,
+                        latitude: String(pos.coords.latitude),
+                        longitude: String(pos.coords.longitude),
+                      }));
+                      setLocating(false);
+                    },
+                    () => setLocating(false)
+                  );
+                }}
+                className="text-xs font-bold text-brand-700 hover:text-brand-800 disabled:opacity-50"
+              >
+                {locating ? "Locating…" : "📍 Use My Location"}
+              </button>
+            </div>
+            <p className="mb-2 text-xs text-slate-400">
+              Powers map/distance features and listing in the Partner Directory.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="number"
+                step="any"
+                placeholder="Latitude"
+                value={form.latitude}
+                onChange={set("latitude")}
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              />
+              <input
+                type="number"
+                step="any"
+                placeholder="Longitude"
+                value={form.longitude}
+                onChange={set("longitude")}
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
           </div>
 
           <button

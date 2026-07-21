@@ -26,6 +26,41 @@ export interface Donation {
   restaurant: {
     _id: string;
     restaurantName: string;
+    city?: string;
+    address?: string;
+    logo?: string;
+    isVerified?: boolean;
   };
   createdAt: string;
+}
+
+export interface Notification {
+  _id: string;
+  title: string;
+  message: string;
+  type: string;
+  priority: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface Session {
+  _id: string;
+  userAgent: string;
+  ip: string;
+  rememberMe: boolean;
+  lastUsedAt: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface RestaurantSummary {
+  _id: string;
+  restaurantName: string;
+  city: string;
+  address: string;
+  latitude?: number;
+  longitude?: number;
+  logo?: string;
+  isVerified: boolean;
 }

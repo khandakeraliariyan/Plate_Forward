@@ -14,16 +14,27 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!user) return;
-    api
-      .get("/notifications/unread-count")
-      .then((res) => setUnread(res.data?.data?.unreadCount ?? 0))
-      .catch(() => {});
-  }, [user]);
+    const load = () =>
+      api
+        .get("/notifications/unread-count")
+        .then((res) => setUnread(res.data?.data?.unreadCount ?? 0))
+        .catch(() => {});
+    load();
+  }, [user, location.pathname]);
 
   const handleLogout = async () => {
     await logout();
     navigate("/");
   };
+
+  const dashboardPath =
+    user?.role === "restaurant"
+      ? "/restaurant/dashboard"
+      : user?.role === "volunteer"
+        ? "/volunteer/dashboard"
+        : user?.role === "admin"
+          ? "/admin"
+          : null;
 
   return (
     <header className="sticky top-0 z-10 border-b border-slate-100 bg-white/90 backdrop-blur">
@@ -39,14 +50,17 @@ export default function Navbar() {
           <Link to="/browse" className={linkClass("/browse")}>
             Browse
           </Link>
+          <Link to="/directory" className={linkClass("/directory")}>
+            Directory
+          </Link>
           {user?.role === "restaurant" && (
             <Link to="/donate/new" className={linkClass("/donate/new")}>
               Donate
             </Link>
           )}
-          {user?.role === "admin" && (
-            <Link to="/admin/donations" className={linkClass("/admin/donations")}>
-              Admin
+          {dashboardPath && (
+            <Link to={dashboardPath} className={linkClass(dashboardPath)}>
+              Dashboard
             </Link>
           )}
           <Link to="/mission" className={linkClass("/mission")}>
@@ -55,7 +69,8 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-4">
-          <button
+          <Link
+            to="/notifications"
             aria-label="Notifications"
             className="relative rounded-full p-2 text-slate-500 hover:bg-slate-50"
           >
@@ -65,7 +80,7 @@ export default function Navbar() {
                 {unread > 9 ? "9+" : unread}
               </span>
             )}
-          </button>
+          </Link>
 
           <div className="group relative">
             <div className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
@@ -73,6 +88,12 @@ export default function Navbar() {
             </div>
             <div className="invisible absolute right-0 mt-2 w-44 rounded-xl border border-slate-100 bg-white p-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
               <div className="px-3 py-2 text-xs text-slate-400">{user?.email}</div>
+              <Link
+                to="/settings"
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Settings
+              </Link>
               <button
                 onClick={handleLogout}
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50"

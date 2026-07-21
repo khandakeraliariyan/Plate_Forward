@@ -11,6 +11,14 @@ import DonationDetail from "./pages/DonationDetail";
 import DonateNew from "./pages/DonateNew";
 import RestaurantProfile from "./pages/RestaurantProfile";
 import AdminDonations from "./pages/AdminDonations";
+import Notifications from "./pages/Notifications";
+import Settings from "./pages/Settings";
+import RestaurantDashboard from "./pages/RestaurantDashboard";
+import VolunteerDashboard from "./pages/VolunteerDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminAnalytics from "./pages/AdminAnalytics";
+import Directory from "./pages/Directory";
+import RestaurantPublicProfile from "./pages/RestaurantPublicProfile";
 import NotFound from "./pages/NotFound";
 
 export default function App() {
@@ -38,10 +46,42 @@ export default function App() {
             }
           />
           <Route
+            path="/directory"
+            element={
+              <ProtectedRoute>
+                <Directory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurants/:id"
+            element={
+              <ProtectedRoute>
+                <RestaurantPublicProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/donations/:id"
             element={
               <ProtectedRoute>
                 <DonationDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Notifications />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />
@@ -58,6 +98,38 @@ export default function App() {
             element={
               <RoleProtectedRoute roles={["restaurant"]}>
                 <RestaurantProfile />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurant/dashboard"
+            element={
+              <RoleProtectedRoute roles={["restaurant"]}>
+                <RestaurantDashboard />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/volunteer/dashboard"
+            element={
+              <RoleProtectedRoute roles={["volunteer"]}>
+                <VolunteerDashboard />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <RoleProtectedRoute roles={["admin"]}>
+                <AdminDashboard />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <RoleProtectedRoute roles={["admin"]}>
+                <AdminAnalytics />
               </RoleProtectedRoute>
             }
           />
