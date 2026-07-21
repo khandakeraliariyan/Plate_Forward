@@ -15,6 +15,11 @@ const readCookie = (name: string) => {
   return match ? decodeURIComponent(match[1]) : null;
 };
 
+// csrfToken is the only session cookie readable from JS (refreshToken is
+// httpOnly); its presence is a proxy for "there might be a session to
+// restore", letting callers skip a guaranteed-403 refresh on a cold visit.
+export const hasSessionCookie = () => readCookie("csrfToken") !== null;
+
 export const api = axios.create({
   baseURL,
   withCredentials: true,

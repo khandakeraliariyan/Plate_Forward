@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, setAccessToken, refreshAccessToken } from "../lib/api";
+import { api, setAccessToken, refreshAccessToken, hasSessionCookie } from "../lib/api";
 import type { Role, User } from "../types";
 
 interface AuthContextValue {
@@ -18,6 +18,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     (async () => {
+      if (!hasSessionCookie()) {
+        setLoading(false);
+        return;
+      }
+
       const token = await refreshAccessToken();
       if (token) {
         try {
