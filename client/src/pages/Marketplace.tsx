@@ -55,7 +55,7 @@ export default function Marketplace() {
 
   useEffect(() => {
     api
-      .get("/donations", { params: { status: "available", limit: 3, sort: "-createdAt" } })
+      .get("/donations", { params: { status: "available", limit: 3, sort: "newest" } })
       .then((res) => setDonations(res.data.data ?? []))
       .finally(() => setLoading(false));
   }, []);
