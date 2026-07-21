@@ -93,7 +93,10 @@ export default function DonateNew() {
       const res = await api.post("/donations", body, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      navigate(`/donations/${res.data.data._id}`, { state: { donation: res.data.data } });
+      // Deliberately omit nav state: the create response's `restaurant` is a
+      // bare id, not populated - navigating without state makes the detail
+      // page fall back to its list fetch, which does populate it.
+      navigate(`/donations/${res.data.data._id}`);
     } catch (err: any) {
       setError(err?.response?.data?.message ?? "Unable to create this donation.");
     } finally {
