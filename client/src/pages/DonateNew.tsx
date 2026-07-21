@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import Navbar from "../components/Navbar";
@@ -29,6 +29,15 @@ export default function DonateNew() {
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingProfile, setCheckingProfile] = useState(true);
+  const [hasProfile, setHasProfile] = useState(false);
+
+  useEffect(() => {
+    api
+      .get("/restaurants/me")
+      .then((res) => setHasProfile(!!res.data.data))
+      .finally(() => setCheckingProfile(false));
+  }, []);
 
   const now = new Date();
   const [form, setForm] = useState({
@@ -91,6 +100,35 @@ export default function DonateNew() {
       setSubmitting(false);
     }
   };
+
+  if (checkingProfile) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Navbar />
+        <div className="flex justify-center py-20 text-sm text-slate-400">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!hasProfile) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Navbar />
+        <div className="mx-auto max-w-md px-6 py-20 text-center">
+          <h1 className="text-2xl font-extrabold text-slate-900">Set Up Your Restaurant First</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            You'll need a restaurant profile before you can post surplus food donations.
+          </p>
+          <button
+            onClick={() => navigate("/restaurant/profile")}
+            className="mt-5 rounded-xl bg-brand-700 px-6 py-3 text-sm font-bold text-white hover:bg-brand-800"
+          >
+            Set Up Restaurant Profile
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

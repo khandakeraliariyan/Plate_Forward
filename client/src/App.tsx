@@ -9,6 +9,7 @@ import Mission from "./pages/Mission";
 import Browse from "./pages/Browse";
 import DonationDetail from "./pages/DonationDetail";
 import DonateNew from "./pages/DonateNew";
+import RestaurantProfile from "./pages/RestaurantProfile";
 import AdminDonations from "./pages/AdminDonations";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,14 @@ export default function App() {
             element={
               <RoleProtectedRoute roles={["restaurant"]}>
                 <DonateNew />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurant/profile"
+            element={
+              <RoleProtectedRoute roles={["restaurant"]}>
+                <RestaurantProfile />
               </RoleProtectedRoute>
             }
           />
